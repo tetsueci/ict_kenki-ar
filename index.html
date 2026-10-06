@@ -12,6 +12,9 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
+  /* ★クラスや id で display を指定すると [hidden] が負ける。
+     読み込み中の幕と縮尺の列で実際に踏んだので、最初にかぜを止める */
+  [hidden] { display: none !important; }
   body { margin: 0; font: 15px/1.6 system-ui, sans-serif; background: #111; color: #eee; }
   canvas { display: block; }
   #ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 12px 14px;
@@ -27,9 +30,6 @@
   #msg { font-size: 12px; color: #999; }
   #load { position: fixed; inset: 0; display: grid; place-items: center;
           background: #111; font-size: 15px; color: #999; }
-  /* ★id で display を指定すると [hidden] が効かない（優先度が勝つ）。
-     これが無いと読み込み中の幕が残って画面が真っ黒に見える */
-  #load[hidden] { display: none; }
 </style>
 
 <div id="load">読み込み中…</div>
@@ -37,6 +37,7 @@
   <div id="read"></div>
   <div class="row" id="machines"></div>
   <div id="sliders"></div>
+  <div class="row" id="scales" hidden><label>縮尺</label></div>
   <div class="row"><button id="ar">AR で置く</button><span id="msg"></span></div>
 </div>
 
@@ -80,6 +81,22 @@ const grid = new THREE.GridHelper(120, 60, 0x555555, 0x2c2c2c);
 scene.add(grid);
 
 let arScale = 1;                      // AR のときだけ縮める
+let arDiv = 50;                       // AR の縮尺の分母（1/50）
+// ★実寸（1/1）は外でしか意味がないし、小さすぎても読めない。
+//   ict_ar-viewer が行き着いた候補にそろえる
+const AR_DIVS = [1, 10, 25, 50, 100];
+const scaleRow = document.getElementById('scales');
+for (const k of AR_DIVS) {
+  const b = document.createElement('button');
+  b.textContent = k === 1 ? '実寸' : '1/' + k;
+  if (k === arDiv) b.className = 'on';
+  b.onclick = () => {
+    arDiv = k; arScale = 1 / k;
+    [...scaleRow.querySelectorAll('button')].forEach(
+      (x, i) => x.classList.toggle('on', AR_DIVS[i] === k));
+  };
+  scaleRow.appendChild(b);
+}
 function placeWorld() {
   const k = 0.001 * arScale;
   world.matrix.set(k, 0, 0, 0,
@@ -212,34 +229,84 @@ const showMsg = () => { msg.textContent = [arMsg, meshMsg].filter(Boolean).join(
 const arBtn = document.getElementById('ar');
 let reticle = null, hitSource = null, placed = false;
 
-if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(() => false)) {
-  arBtn.onclick = startAR;
-} else {
-  arBtn.disabled = true;
-  arMsg = location.protocol === 'https:'
-    ? 'この端末では AR が使えません（3D 表示だけ）'
-    : 'AR には HTTPS が要ります。いまは 3D 表示だけです';
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// ★何が起きているかを必ず画面に出す。
+//   requestSession が失敗しても握りつぶしていたので、
+//   「押しても何も起きない」になっていた（2026-10-06 指摘）
+const diag = () => [
+  location.protocol.replace(':', ''),
+  'xr=' + (navigator.xr ? 'あり' : 'なし'),
+  IS_IOS ? 'iOS' : (/Android/.test(navigator.userAgent) ? 'Android' : 'PC'),
+].join(' ');
+
+const arStart = () => startAR().catch(e => {
+  arMsg = 'AR を始められませんでした：' + (e && e.message ? e.message : e)
+        + '（' + diag() + '）';
   showMsg();
+});
+
+// iPhone：Variant Launch の中で開き直すと WebXR が使える（align.js と同じ）
+function launchReady(d) {
+  if (!d || !d.launchRequired) return false;
+  arBtn.disabled = false;
+  arBtn.textContent = 'AR を始める（iPhone：「開く」を押してください）';
+  arBtn.onclick = () => { location.href = d.launchUrl; };
+  arMsg = ''; showMsg();
+  return true;
+}
+
+if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(() => false)) {
+  arBtn.onclick = arStart;
+} else if (!launchReady(window.__vl)) {
+  arBtn.disabled = true;
+  arMsg = location.protocol !== 'https:'
+    ? 'AR には HTTPS が要ります。いまは 3D 表示だけです（' + diag() + '）'
+    : IS_IOS
+      ? '準備中です。少し待ってから読み込み直してください（' + diag() + '）'
+      : 'この端末・ブラウザでは AR を始められません。Android は Chrome と'
+        + '「Google Play 開発者サービス（AR）」が要ります（' + diag() + '）';
+  showMsg();
+  // Variant Launch は遅れて用意ができる
+  addEventListener('vlaunch-initialized', e => { launchReady(e.detail); });
 }
 
 async function startAR() {
-  const session = await navigator.xr.requestSession('immersive-ar',
-    { requiredFeatures: ['hit-test'] });
+  const overlay = document.getElementById('ui');
+  const session = await navigator.xr.requestSession('immersive-ar', {
+    requiredFeatures: ['hit-test'],
+    // ★dom-overlay が無いと、AR に入った瞬間に操作盤が消えて機械を動かせない。
+    //   見るだけなら要らないが、この道具では必須
+    optionalFeatures: ['local', 'dom-overlay'],
+    domOverlay: { root: overlay },
+  });
+  // ★操作盤を触ったぶんまで「地面をタップした」ことにされないようにする
+  overlay.addEventListener('beforexrselect', e => e.preventDefault());
   await renderer.xr.setSession(session);
-  grid.visible = false; arScale = 1 / 50; placed = false;
+  grid.visible = false; placed = false; arScale = 1 / arDiv;
+  arBtn.textContent = 'AR をやめる';
+  arBtn.onclick = () => session.end();
+  scaleRow.hidden = false;
   reticle = new THREE.Mesh(
     new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
   reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
   const viewer = await session.requestReferenceSpace('viewer');
   hitSource = await session.requestHitTestSource({ space: viewer });
+  arMsg = '地面を映して、十字が出たらタップ'; showMsg();
   session.addEventListener('select', () => {
-    if (reticle.visible) { world.position.setFromMatrixPosition(reticle.matrix); placed = true; }
+    if (reticle.visible) {
+      world.position.setFromMatrixPosition(reticle.matrix);
+      placed = true; arMsg = ''; showMsg();
+    }
   });
   session.addEventListener('end', () => {
     hitSource = null; grid.visible = true; arScale = 1;
     world.position.set(0, 0, 0);
     if (reticle) { scene.remove(reticle); reticle = null; }
+    arBtn.textContent = 'AR で置く'; arBtn.onclick = arStart;
+    scaleRow.hidden = true; arMsg = ''; showMsg();
     frameCamera();
   });
 }

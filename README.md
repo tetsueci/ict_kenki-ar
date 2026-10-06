@@ -149,6 +149,25 @@ node test/run.mjs            158 /  158 一致   （クローラー）
 
 AR まで出すには GitHub Pages のような HTTPS の置き場所が要る。
 
+### AR が始まらないとき
+
+★**画面の下に理由が出る**（`AR を始められませんでした：…（https xr=あり Android）`）。
+「押しても何も起きない」のは**こちらが知らせを出していなかった**ため（2026-10-06 に直した）。
+
+- `xr=なし` … その端末・ブラウザに WebXR が無い。
+  Android は **Chrome** と **「Google Play 開発者サービス（AR）」**（ARCore）が要る
+- `http` … HTTPS でないと `navigator.xr` 自体が出てこない
+- iPhone … ボタンが「iPhone：「開く」を押してください」に変わる。
+  押すと Variant Launch の中で開き直してから AR になる
+
+### AR に入ったらできること
+
+- **地面を映して、十字が出たらタップ**すると、そこに置く
+- ★**操作盤は AR の中でも出たまま**（`dom-overlay`）。置いたあとも
+  旋回・起伏・伸縮を動かせる。操作盤を触っても置き直されない（`beforexrselect`）
+- **縮尺**は 実寸 / 1/10 / 1/25 / 1/50 / 1/100。既定は 1/50（室内で全体が見える）
+
+
 - **Android（Chrome）** … Pages に上げればそのまま動く
 - **iPhone（Safari）** … Safari に WebXR が無いので **Variant Launch** を通す。
   `index.html` の先頭で `ict_ar-viewer/common/vlaunch.js` を読んでいる（写していない）。
