@@ -17,8 +17,15 @@
   [hidden] { display: none !important; }
   body { margin: 0; font: 15px/1.6 system-ui, sans-serif; background: #111; color: #eee; }
   canvas { display: block; }
-  #ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 12px 14px;
-        background: rgba(20,20,22,.9); backdrop-filter: blur(6px); }
+  /* ★★#ui は dom-overlay の親。AR 中は UA がこれを**全画面**にする。
+     だから背景もぼかしもここに付けてはいけない。
+     backdrop-filter: blur(6px) を付けていたせいで、
+     **カメラ映像もモデルも画面ごとぼけていた**（2026-10-06 実機で発生）。
+     align.js の #overlay も透明で pointer-events: none。同じにする。
+     透かすことで、操作盤の外をタップすれば地面に置ける */
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+  #panel { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 12px 14px;
+           background: rgba(20,20,22,.92); pointer-events: auto; }
   .row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
   .row label { flex: 0 0 7.5em; font-size: 13px; color: #bbb; }
   .row input[type=range] { flex: 1 1 auto; min-width: 0; }
@@ -42,12 +49,14 @@
 
 <div id="load">読み込み中…</div>
 <div id="ui" hidden>
-  <div id="read"></div>
-  <div class="row" id="machines"></div>
-  <div id="sliders"></div>
-  <div class="row" id="scales" hidden><label>縮尺</label></div>
-  <div class="row"><button id="ar">AR で置く</button></div>
-  <div id="msg"></div>
+  <div id="panel">
+    <div id="read"></div>
+    <div class="row" id="machines"></div>
+    <div id="sliders"></div>
+    <div class="row" id="scales" hidden><label>縮尺</label></div>
+    <div class="row"><button id="ar">AR で置く</button></div>
+    <div id="msg"></div>
+  </div>
 </div>
 
 <script type="module">
