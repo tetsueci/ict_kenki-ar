@@ -27,7 +27,12 @@
            background: #2a2a2e; color: #eee; }
   button.on { background: #1f6feb; border-color: #1f6feb; }
   #read { font-size: 17px; font-weight: 600; margin: 2px 0 6px; }
-  #msg { font-size: 12px; color: #999; }
+  /* ★知らせは必ず全部読めるようにする。横に並べると切れて、
+     肝心の理由が見えない（2026-10-06 に実際そうなった）*/
+  #msg { font-size: 13px; color: #d0d4d8; line-height: 1.45;
+         white-space: pre-wrap; word-break: break-word; margin-top: 4px; }
+  #msg:empty { display: none; }
+  #msg.err { color: #ffb4a8; }
   #load { position: fixed; inset: 0; display: grid; place-items: center;
           background: #111; font-size: 15px; color: #999; }
 </style>
@@ -38,7 +43,8 @@
   <div class="row" id="machines"></div>
   <div id="sliders"></div>
   <div class="row" id="scales" hidden><label>縮尺</label></div>
-  <div class="row"><button id="ar">AR で置く</button><span id="msg"></span></div>
+  <div class="row"><button id="ar">AR で置く</button></div>
+  <div id="msg"></div>
 </div>
 
 <script type="module">
@@ -225,7 +231,10 @@ const msg = document.getElementById('msg');
 // ★AR の知らせと「メッシュが無い」の知らせは別々に持って合わせる。
 //   1 つの欄に直接入れると、機械を読むたびに AR の知らせが消える
 let arMsg = '', meshMsg = '';
-const showMsg = () => { msg.textContent = [arMsg, meshMsg].filter(Boolean).join('　/　'); };
+const showMsg = () => {
+  msg.textContent = [arMsg, meshMsg].filter(Boolean).join('\n');
+  msg.classList.toggle('err', /始められません|要ります|できません/.test(arMsg));
+};
 const arBtn = document.getElementById('ar');
 let reticle = null, hitSource = null, placed = false;
 
@@ -242,10 +251,34 @@ const diag = () => [
 ].join(' ');
 
 const arStart = () => startAR().catch(e => {
-  arMsg = 'AR を始められませんでした：' + (e && e.message ? e.message : e)
-        + '（' + diag() + '）';
+  arMsg = 'AR を始められませんでした（' + diag() + '）\n'
+        + (e && e.message ? e.message : e);
   showMsg();
 });
+
+// ★頼むものを段々と減らして試す。
+//   どれで落ちたかを全部書き出すので、1 往復で原因が分かる。
+//   端末によっては dom-overlay や hit-test を断られることがあり、
+//   その 1 つのために AR ごと始められないのはもったいない
+async function requestSessionStepDown(overlay) {
+  const tries = [
+    ['操作盤つき', { requiredFeatures: ['hit-test'],
+                     optionalFeatures: ['local', 'dom-overlay'],
+                     domOverlay: { root: overlay } }],
+    ['操作盤なし', { requiredFeatures: ['hit-test'] }],
+    ['地面検出なし', {}],
+  ];
+  const ng = [];
+  for (const [label, opts] of tries) {
+    try {
+      const session = await navigator.xr.requestSession('immersive-ar', opts);
+      return { session, label, overlayOK: label === '操作盤つき', hitOK: label !== '地面検出なし', ng };
+    } catch (e) {
+      ng.push('・' + label + '：' + (e && e.name ? e.name + ' ' : '') + (e && e.message ? e.message : e));
+    }
+  }
+  throw new Error(ng.join('\n'));
+}
 
 // iPhone：Variant Launch の中で開き直すと WebXR が使える（align.js と同じ）
 function launchReady(d) {
@@ -274,15 +307,11 @@ if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(
 
 async function startAR() {
   const overlay = document.getElementById('ui');
-  const session = await navigator.xr.requestSession('immersive-ar', {
-    requiredFeatures: ['hit-test'],
-    // ★dom-overlay が無いと、AR に入った瞬間に操作盤が消えて機械を動かせない。
-    //   見るだけなら要らないが、この道具では必須
-    optionalFeatures: ['local', 'dom-overlay'],
-    domOverlay: { root: overlay },
-  });
-  // ★操作盤を触ったぶんまで「地面をタップした」ことにされないようにする
-  overlay.addEventListener('beforexrselect', e => e.preventDefault());
+  const { session, label, overlayOK, hitOK, ng } = await requestSessionStepDown(overlay);
+  if (overlayOK) {
+    // ★操作盤を触ったぶんまで「地面をタップした」ことにされないようにする
+    overlay.addEventListener('beforexrselect', e => e.preventDefault());
+  }
   await renderer.xr.setSession(session);
   grid.visible = false; placed = false; arScale = 1 / arDiv;
   arBtn.textContent = 'AR をやめる';
@@ -292,9 +321,20 @@ async function startAR() {
     new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
   reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
-  const viewer = await session.requestReferenceSpace('viewer');
-  hitSource = await session.requestHitTestSource({ space: viewer });
-  arMsg = '地面を映して、十字が出たらタップ'; showMsg();
+
+  if (hitOK) {
+    const viewer = await session.requestReferenceSpace('viewer');
+    hitSource = await session.requestHitTestSource({ space: viewer });
+    arMsg = '地面を映して、十字が出たらタップ';
+  } else {
+    // 地面が取れないときは、目の前に置くだけにする
+    world.position.set(0, -1.2, -4);
+    placed = true;
+    arMsg = 'この端末では地面を見つけられないので、目の前に置きました';
+  }
+  if (ng.length) arMsg += '\n（' + label + 'で始めました。断られたもの）\n' + ng.join('\n');
+  showMsg();
+
   session.addEventListener('select', () => {
     if (reticle.visible) {
       world.position.setFromMatrixPosition(reticle.matrix);
