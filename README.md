@@ -160,6 +160,10 @@ AR まで出すには GitHub Pages のような HTTPS の置き場所が要る�
 - `xr=なし` … その端末・ブラウザに WebXR が無い。
   Android は **Chrome** と **「Google Play 開発者サービス（AR）」**（ARCore）が要る
 - `http` … HTTPS でないと `navigator.xr` 自体が出てこない
+- ★`requestReferenceSpace … does not support the requested reference space type`
+  … **three.js の既定が `local-floor`** で、対応していない端末がある。
+  `renderer.xr.setReferenceSpaceType('local')` で直る（2026-10-06 に実機で発生）。
+  align.js も `'local'` にしている
 - iPhone … ボタンが「iPhone：「開く」を押してください」に変わる。
   押すと Variant Launch の中で開き直してから AR になる
 

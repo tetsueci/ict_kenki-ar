@@ -76,6 +76,14 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.xr.enabled = true;
+// ★これが無いと Android の一部で AR が始まらない。
+//   three.js の既定は 'local-floor' だが、対応していない端末があり、
+//   setSession の中で
+//     Failed to execute 'requestReferenceSpace' on 'XRSession':
+//     This device does not support the requested reference space type
+//   で落ちる（2026-10-06 に実機で発生）。
+//   ict_ar-viewer/common/align.js も 'local' にしている
+renderer.xr.setReferenceSpaceType('local');
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2));
@@ -332,6 +340,18 @@ async function startAR() {
     // ★操作盤を触ったぶんまで「地面をタップした」ことにされないようにする
     overlay.addEventListener('beforexrselect', e => e.preventDefault());
   }
+  // ★ここから先で落ちたら、開いたセッションを閉じてから知らせる。
+  //   閉じないと、カメラだけ映って何も操作できない状態で取り残される
+  //   （requestReferenceSpace の失敗で実際そうなった）
+  try {
+    await startInSession(session, { label, overlayOK, hitOK, ng });
+  } catch (e) {
+    await session.end().catch(() => {});
+    throw e;
+  }
+}
+
+async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   await renderer.xr.setSession(session);
   grid.visible = false; placed = false; arScale = 1 / arDiv;
   arBtn.textContent = 'AR をやめる';
