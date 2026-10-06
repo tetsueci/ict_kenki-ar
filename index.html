@@ -88,7 +88,10 @@ document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(4, 9, 3); scene.add(sun);
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 600);
+// ★画角と前後の切りとろは align.js と同じにする。
+//   AR では画角は端末が決めるが、近い側の切りとろ（0.01m）は効く。
+//   1/50 に縮めると手元まで寄れるので、ここが浅いと前が欠ける
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 300);
 // 3D で見るときだけ回せるようにする（AR のときは WebXR がカメラを持つ）
 const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.enableDamping = true;
@@ -357,9 +360,20 @@ async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   arBtn.textContent = 'AR をやめる';
   arBtn.onclick = () => session.end();
   scaleRow.hidden = false;
-  reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+  // ★十字。align.js と同じ形（丸＋縦横の線＋真ん中の赤い点）。
+  //   丸だけだと「どこが中心か」が分からないし、
+  //   案内の文（十字が出たら）とも食い違う
+  reticle = new THREE.Group();
+  {
+    const w = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false });
+    const r = new THREE.MeshBasicMaterial({ color: 0xff3b30, depthTest: false });
+    [
+      new THREE.Mesh(new THREE.RingGeometry(0.09, 0.11, 40).rotateX(-Math.PI / 2), w),
+      new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.012).rotateX(-Math.PI / 2), w),
+      new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.30).rotateX(-Math.PI / 2), w),
+      new THREE.Mesh(new THREE.CircleGeometry(0.012, 16).rotateX(-Math.PI / 2), r),
+    ].forEach(o => { o.renderOrder = 10; reticle.add(o); });
+  }
   reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
 
   if (hitOK) {
