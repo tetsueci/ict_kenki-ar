@@ -2,6 +2,7 @@
   "id": "KATO_SR250Rf2",
   "type": "rough_terrain_crane",
   "title": "KATO SR-250Rf2 ラフタークレーン",
+  "short": "25tRC",
   "note": "KATO_SR250Rf2.dwg の車体(手 4599)の XDATA から。2026-10-06 に実機で読み出した",
   "unit": "mm",
   "scale": 1.0,

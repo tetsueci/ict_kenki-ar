@@ -26,6 +26,9 @@
   button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #555;
            background: #2a2a2e; color: #eee; }
   button.on { background: #1f6feb; border-color: #1f6feb; }
+  select { font: inherit; padding: 6px 10px; border-radius: 8px;
+           border: 1px solid #555; background: #2a2a2e; color: #eee; }
+  .muted { font-size: 12px; color: #8b9199; }
   #read { font-size: 17px; font-weight: 600; margin: 2px 0 6px; }
   /* ★知らせは必ず全部読めるようにする。横に並べると切れて、
      肝心の理由が見えない（2026-10-06 に実際そうなった）*/
@@ -59,6 +62,14 @@ const KINEMATICS = {
   crawler_crane: poseCrawlerCrane,
 };
 const LIST = ['KATO_SR250Rf2', '120tcrawlercrane'];
+// ドロップダウンに出す短い名前。★正は machines/*.json の short
+const SHORT = {};
+await Promise.all(LIST.map(async id => {
+  try {
+    const j = await (await fetch(`machines/${id}.json`, { cache: 'no-cache' })).json();
+    SHORT[id] = j.short || j.title || id;
+  } catch { SHORT[id] = id; }
+}));
 
 // ---- 画面 -----------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -129,11 +140,11 @@ async function loadMachine(id) {
   const ld = document.getElementById('load');
   ld.hidden = false; ld.textContent = '読み込み中…';
   world.clear(); nodes = {};
-  M = await (await fetch(`machines/${id}.json`)).json();
+  M = await (await fetch(`machines/${id}.json`, { cache: 'no-cache' })).json();
   pose = KINEMATICS[M.type];
 
   if (M.models) {
-    const parts = await (await fetch(M.models + '_parts.json')).json();
+    const parts = await (await fetch(M.models + '_parts.json', { cache: 'no-cache' })).json();
     for (const [name, info] of Object.entries(parts)) {
       const g = await loader.loadAsync(M.models + info.file);
       g.scene.traverse(c => { if (c.isMesh) c.material = matOf(name); });
@@ -166,15 +177,24 @@ async function loadMachine(id) {
 }
 
 function buildUI() {
+  // ★機種はドロップダウン。ボタンを並べると長い名前で 1 行を食いつぶす。
+  //   出す名前は machines/*.json の short（25tRC・120tCC）
   const mw = document.getElementById('machines');
   mw.innerHTML = '<label>機械</label>';
+  const sel = document.createElement('select');
   for (const id of LIST) {
-    const b = document.createElement('button');
-    b.textContent = id === M.id ? M.title : id;
-    if (id === M.id) b.className = 'on';
-    b.onclick = () => loadMachine(id);
-    mw.appendChild(b);
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = SHORT[id] || id;
+    if (id === M.id) o.selected = true;
+    sel.appendChild(o);
   }
+  sel.onchange = () => loadMachine(sel.value);
+  mw.appendChild(sel);
+  const t = document.createElement('span');
+  t.className = 'muted';
+  t.textContent = M.title;
+  mw.appendChild(t);
   const sw = document.getElementById('sliders');
   sw.innerHTML = '';
   for (const c of M.controls) {

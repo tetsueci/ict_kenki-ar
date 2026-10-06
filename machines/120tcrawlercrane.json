@@ -2,6 +2,7 @@
   "id": "120tcrawlercrane",
   "type": "crawler_crane",
   "title": "120t クローラークレーン",
+  "short": "120tCC",
   "note": "crawler.dwg の車体(手 14BAAF)の XDATA から。2026-09-08 に実機で読み出したもの",
   "unit": "mm",
   "scale": 1.0,
