@@ -1,58 +1,58 @@
 # KATO SR-250Rf2 の部品メッシュ
 
 `KATO_SR250Rf2.dwg` の部品ブロック（中身は **3DSOLID＝ACIS**）から出した GLB。
-作り方は `tools/` の 3 本。CAD は要らない（ACIS の文字列は BRIDGE で
-`../DAM/kenki/work/KATO_SR250Rf2/acis/` へ書き出し済み）。
+**CAD に三角形化させている**（STL 経由）。
 
 ```bash
-python tools/solids_to_glb.py \
-       ../DAM/kenki/work/KATO_SR250Rf2/acis models/KATO_SR250Rf2 \
-       --prefix "KATO_SR-250Rf2_H-"
-python tools/check_bbox.py \
-       models/KATO_SR250Rf2/_parts.json \
+# 1) AutoCAD 側（BRIDGE の inbox から vla-SendCommand で流す）
+#    (load ".../kenki/work/KATO_SR250Rf2/make_mesh.lsp") KATOMESH
+# 2) こちら側
+python tools/stl_to_glb.py ../DAM/kenki/work/KATO_SR250Rf2/mesh models/KATO_SR250Rf2
+python tools/check_bbox.py models/KATO_SR250Rf2/_parts.json \
        ../DAM/kenki/work/KATO_SR250Rf2/blockbox.txt --prefix "KATO_SR-250Rf2_H-"
 ```
 
-★**座標はブロックのまま（mm・Z 上）**。ページ側が CAD → three.js の変換を
-まとめて掛けるので、ここで直すと二重になる。GLB を単体で開くと横倒しで
-巨大に見えるが、それで正しい。
+★座標は**ブロックのまま（mm・Z 上）**。ページ側が CAD → three.js の変換を
+まとめて掛けるので、ここで直すと二重になる。
 
 ## 確かめたこと
 
-CAD で測ったブロックの外接箱（`blockbox.txt`）と突き合わせて **10 / 12 一致**。
+CAD で測ったブロックの外接箱と **12 / 12 一致**（部品 18・三角形 24,314）。
 
-残り 2 つは、どちらも**曲面を取りこぼしたぶん**:
+## なぜ ACIS を自前で割るのをやめたか
 
-| 部品 | 出した高さ | CAD | |
-|---|---|---|---|
-| hook | 975 | 1123 | フックの喉の丸み（torus）が無い。-148mm |
-| jibhook | 667 | 671 | 16 角形で内接させているぶん。-0.6% |
-
-機械全体で 2039 面のうち torus 24 面・spline 28 面（2.5%）を捨てている。
-平面 1508 面と円柱・円錐 479 面は入っている。
-
----
-
-## ★このメッシュは穴だらけ。作り直しが要る（2026-10-06）
-
-近くで見ると**面が大きく抜けている**。原因は推測ではなく数えた結果:
+最初は `ezdxf` で ACIS を読んで三角形にしていたが、**穴だらけ**になった。
+数えた結果:
 
 | | 枚 |
 |---|---|
-| ACIS の面（全体） | 2039 |
+| ACIS の面（全体）| 2039 |
 | うち平面 | 1508 |
-| **ezdxf が返した平面** | **809** |
+| ezdxf が返した平面 | 809 |
 | → **取りこぼした平面** | **699（46%）** |
-| 円柱・円錐 | 479（自前。部分的）|
-| torus / spline | 24 / 28（捨てている）|
 
-部品ごとではキャビンが最悪で、**平面 620 枚のうち 123 枚しか返っていない**（80% 欠け）。
+`ezdxf` の `mesh_from_body` は「**縁が直線だけでできた平らな面**」しか返さない
+（本人の注記どおり。曲面を割るには ACIS のカーネルが要る）。
+丸みのある縁・穴のある面・曲面は全部落ちる。キャビンは 80% 欠けていた。
 
-**なぜ**: `ezdxf` の `mesh_from_body` は「**縁が直線だけでできた平らな面**」しか返さない。
-丸みのある縁・穴のある面・曲面は、すべて落ちる。
-ACIS をきちんと三角形にするには**カーネルが要る**（ezdxf 本人の注記のとおり）。
-自前で穴あき多角形の三角形分割と曲面の標本化まで作るのは、CAD を作り直すのに近い。
+## CAD 側で分かったこと（AutoCAD 2026 で実測）
 
-**どうするか**: ★**CAD に三角形化させる**。CAD はカーネルを持っている。
-バックホウ・クローラーはもともとポリフェイスメッシュなので、この問題は起きない。
-**ACIS で作られている KATO 固有の問題**。
+- **COM（vla）に三角形化は無い。** 3DSOLID に `Explode` / `ConvertToMesh` /
+  `Tessellate` / `GetMesh` はどれも無い（`vlax-invoke` でも「不正な名前」）。
+  あるのは `Boolean` / `CheckInterference` / `SectionSolid` / `SliceSolid` /
+  `GetBoundingBox` / `TransformBy` / `Copy` / `IntersectWith` / `Mirror3D`
+- **`MESHSMOOTH` はコマンドとしては在る**（`CMDNAMES` に出る）が、
+  選択を渡しても**変換しない**（後も 3DSOLID のまま）
+- **`3DPRINT` は無い**
+- ★**`STLOUT` は通る。** カーネルが割った三角形がそのまま出る
+
+## STLOUT の癖（踏んだもの）
+
+- ★★**座標を 0 以上へずらすことがある。** cylinder0 で min が
+  (-0.07, -134.74, -137) → STL では (0,0,0)。ずらさない部品もある。
+  `make_mesh.lsp` が **CAD で測った外接箱**を `_bbox.txt` に一緒に書き出し、
+  `stl_to_glb.py` がそれで戻す
+- ★**立体 1 つにつき STL 1 本にする。** 部品の立体をまとめて渡すと、
+  1 つこけただけで**部品ごと 0 バイト**になり、しかも AutoCAD が
+  そのファイルを掴んだままになって消せなくなった（キャビンで発生）
+- `FILEDIA` を 0 にしないとファイル名を聞いてくれない

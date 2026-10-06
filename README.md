@@ -61,39 +61,29 @@ align.js は three.js のシーングラフを自分で持っているので、
 ②は「**形はブロック、数字はテキスト**」がそのまま効く。
 XDATA の名前なしの数列に名前を付けただけのものが、**そのままアプリの入力**になる。
 
-## 3. 形：3DSOLID（ACIS）から三角形へ
+## 3. 形：CAD に三角形化させる（STL 経由）
 
-`KATO_SR250Rf2.dwg` の部品ブロックの中身は **3DSOLID（ACIS）**だった。
-バックホウやクローラーのポリフェイスメッシュとは別物。
+部品ブロックの中身は機種で違う。
+
+| 機種 | 中身 | 作り方 |
+|---|---|---|
+| KATO SR-250Rf2 | **3DSOLID（ACIS）** | CAD に STL を吐かせる → `tools/stl_to_glb.py` |
+| バックホウ・クローラー | ポリフェイスメッシュ | 面をそのまま読む（これから） |
 
 ```bash
-python tools/solids_to_glb.py \
-       ../DAM/kenki/work/KATO_SR250Rf2/acis models/KATO_SR250Rf2 \
-       --prefix "KATO_SR-250Rf2_H-"
-python tools/check_bbox.py models/KATO_SR250Rf2/_parts.json \
-       ../DAM/kenki/work/KATO_SR250Rf2/blockbox.txt --prefix "KATO_SR-250Rf2_H-"
+# 1) AutoCAD 側（BRIDGE の inbox から vla-SendCommand で流す）
+#    (load ".../kenki/work/KATO_SR250Rf2/make_mesh.lsp") KATOMESH
+# 2) こちら側
+python tools/stl_to_glb.py ../DAM/kenki/work/KATO_SR250Rf2/mesh models/KATO_SR250Rf2
+python tools/check_bbox.py models/KATO_SR250Rf2/_parts.json        ../DAM/kenki/work/KATO_SR250Rf2/blockbox.txt --prefix "KATO_SR-250Rf2_H-"
 ```
 
-| 道具 | 役目 |
-|---|---|
-| `tools/sat_decode.py` | `entget` の group 1/3 を **159−c** でほどく |
-| `tools/satgraph.py` | face→loop→coedge→edge→curve をたどって**曲面**を三角形に |
-| `tools/solids_to_glb.py` | 平面は ezdxf、曲面は satgraph。ブロックごとに GLB |
-| `tools/check_bbox.py` | 出した外接箱を CAD の実測と突き合わせる |
+CAD で測った外接箱と **12 / 12 一致**（部品 18・三角形 24,314）。
 
-ezdxf は**平らな面しか返さない**（本人の注記どおり。曲面を割るには ACIS のカーネルが要る）ので、
-曲面は自前。KATO は 2039 面のうち平面 1508・円柱円錐 479・torus 24・spline 28。
-
-**CAD で測ったブロックの外接箱と 10 / 12 一致**（三角形 8409）。
-残り 2 つは曲面の取りこぼしで、**フックの喉の丸み（−148mm）**と、16 角形で内接させたぶん（−0.6%）。
-
-### 踏んだもの（どれもコードのコメントに残した）
-
-- ★ACIS の `transform` を掛け忘れるとブームが **9350mm 飛ぶ**
-  （2026-09 にブロック定義を平行移動して直した、あのずれと同じ数）
-- ★弧の媒介変数の範囲を使わないと、隅の丸みが 1 周の円になって**キャビンが 7 倍**に伸びる
-- `tcoedge-coedge` / `tedge-edge` は並びが違う。読むと見当違いの円を拾う
-- 「同じ軸の円を並べて筒にする」方式は、関係のない穴どうしが繋がる（没）
+★**ACIS を自前で三角形にするのはやめた。** `ezdxf` で読むと
+**平面だけで 46% 取りこぼし**、穴だらけになった（キャビンは 80% 欠け）。
+ACIS を割るにはカーネルが要る。CAD は持っているので CAD にやらせる。
+詳しくは `models/KATO_SR250Rf2/README.md`。
 
 ## 4. 動き：実機と突き合わせて確かめている
 
