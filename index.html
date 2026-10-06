@@ -2,6 +2,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>重機 AR（試作）</title>
+
+<!-- iPhone で WebXR を使うための Variant Launch。
+     ★共通部品の正は ict_ar-viewer/common/vlaunch.js なので、写さずにそこから読む。
+     ★module より**先に**、普通の script として読むこと（document.write で
+       SDK を差し込むため）。読むのは iPhone/iPad のときだけで、
+       Android・PC では何も起きない -->
+<script src="https://tetsueci.github.io/ict_ar-viewer/common/vlaunch.js"></script>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -130,8 +137,9 @@ async function loadMachine(id) {
   buildUI(); apply(); frameCamera();
   ld.hidden = true;
   document.getElementById('ui').hidden = false;
-  document.getElementById('msg').textContent = M.models ? ''
+  meshMsg = M.models ? ''
     : 'この機械は部品のメッシュがまだありません（計算だけ動いています）';
+  showMsg();
 }
 
 function buildUI() {
@@ -197,6 +205,10 @@ function frameCamera() {
 
 // ---- AR -------------------------------------------------------------
 const msg = document.getElementById('msg');
+// ★AR の知らせと「メッシュが無い」の知らせは別々に持って合わせる。
+//   1 つの欄に直接入れると、機械を読むたびに AR の知らせが消える
+let arMsg = '', meshMsg = '';
+const showMsg = () => { msg.textContent = [arMsg, meshMsg].filter(Boolean).join('　/　'); };
 const arBtn = document.getElementById('ar');
 let reticle = null, hitSource = null, placed = false;
 
@@ -204,7 +216,10 @@ if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(
   arBtn.onclick = startAR;
 } else {
   arBtn.disabled = true;
-  msg.textContent = 'この端末では AR が使えません（3D 表示だけ）';
+  arMsg = location.protocol === 'https:'
+    ? 'この端末では AR が使えません（3D 表示だけ）'
+    : 'AR には HTTPS が要ります。いまは 3D 表示だけです';
+  showMsg();
 }
 
 async function startAR() {

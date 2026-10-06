@@ -137,4 +137,19 @@ node test/run.mjs            158 /  158 一致   （クローラー）
 2. ジブ・走行・吊荷
 3. フックの喉（torus 面）を割る
 4. align.js と同じ「2 点合わせ」を入れて、現場の座標に乗せる
-5. スマホで見るには **HTTPS** が要る。GitHub Pages に置くかどうかは未定
+5. 公開（GitHub Pages）。**まだ remote を付けていない**
+
+## 6. スマホで見るには
+
+| | |
+|---|---|
+| **この PC** | `http://localhost:8795`。3D だけ（PC に WebXR が無い）|
+| **同じ Wi-Fi のスマホ** | `--bind 0.0.0.0` にして `http://<PCのIP>:8795`。**3D だけ** |
+| **AR** | ★**HTTPS が要る。** `http://` では `navigator.xr` 自体が出てこない |
+
+AR まで出すには GitHub Pages のような HTTPS の置き場所が要る。
+
+- **Android（Chrome）** … Pages に上げればそのまま動く
+- **iPhone（Safari）** … Safari に WebXR が無いので **Variant Launch** を通す。
+  `index.html` の先頭で `ict_ar-viewer/common/vlaunch.js` を読んでいる（写していない）。
+  ★module より**先に**、普通の `script` として読むこと（`document.write` で SDK を差し込むため）
