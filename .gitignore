@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# ACIS の中間ファイルは入れない（12MB・生成物）。
+# 作り直すときは DAM\kenki\bridge から書き出す。手順は README
+acis/
+_sat/

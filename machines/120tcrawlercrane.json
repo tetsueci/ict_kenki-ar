@@ -1,0 +1,112 @@
+{
+  "id": "120tcrawlercrane",
+  "type": "crawler_crane",
+  "title": "120t クローラークレーン",
+  "note": "crawler.dwg の車体(手 14BAAF)の XDATA から。2026-09-08 に実機で読み出したもの",
+  "unit": "mm",
+  "scale": 1.0,
+  "dims": {
+    "body_to_cabin": [
+      0.0,
+      0.0,
+      1140.0
+    ],
+    "cabin_to_boom": [
+      1240.23,
+      690.96,
+      -190.0
+    ],
+    "cabin_to_spreader": [
+      -3799.97,
+      6529.92,
+      -190.0
+    ],
+    "boom_to_spreader": [
+      -909.956,
+      1031.74,
+      0.0
+    ],
+    "spreader0": 42416.7,
+    "spreader1": 10018.6,
+    "wire": 8000.0,
+    "hook": 800.0
+  },
+  "booms": [
+    {
+      "name": "51.8m",
+      "length": 51424.6
+    },
+    {
+      "name": "36.6m",
+      "length": 36222.6
+    },
+    {
+      "name": "27.4m",
+      "length": 27130.3
+    },
+    {
+      "name": "18.3m",
+      "length": 18132.7
+    },
+    {
+      "name": "9.1m",
+      "length": 8935.18
+    }
+  ],
+  "parts": [
+    "body",
+    "cabin",
+    "spreader0",
+    "spreader1",
+    "boom_wire",
+    "boom_guyline",
+    "wire",
+    "hook",
+    "boom0",
+    "boom1",
+    "boom2",
+    "boom3",
+    "boom4"
+  ],
+  "controls": [
+    {
+      "key": "boomType",
+      "label": "ブームの種類",
+      "type": "choice",
+      "from": "booms"
+    },
+    {
+      "key": "angleCabin",
+      "label": "キャビン旋回",
+      "unit": "°",
+      "min": -180,
+      "max": 180,
+      "step": 1
+    },
+    {
+      "key": "angleBoom",
+      "label": "ブーム角度",
+      "unit": "°",
+      "min": 0,
+      "max": 85,
+      "step": 1
+    },
+    {
+      "key": "lengthWire",
+      "label": "ワイヤ長さ",
+      "unit": "m",
+      "min": 1,
+      "max": 50,
+      "step": 0.5
+    }
+  ],
+  "readouts": [
+    {
+      "key": "radius",
+      "label": "作業半径",
+      "unit": "m",
+      "scale": 0.001,
+      "digits": 2
+    }
+  ]
+}

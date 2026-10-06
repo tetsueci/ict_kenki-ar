@@ -1,0 +1,6 @@
+{
+  "name": "kenki-ar",
+  "private": true,
+  "type": "module",
+  "description": "重機 AR（試作）。src/ は Node でもブラウザでも同じものを読むので type: module が要る"
+}

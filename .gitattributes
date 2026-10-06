@@ -1,0 +1,8 @@
+# 改行は LF にそろえる（ブラウザ側のコードなので）
+* text=auto eol=lf
+
+# ★GLB は binary と明示する。autocrlf が効いている環境で
+#   テキスト扱いされると壊れる
+*.glb binary
+*.png binary
+*.jpg binary

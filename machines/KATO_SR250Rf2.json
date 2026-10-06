@@ -1,0 +1,124 @@
+{
+  "id": "KATO_SR250Rf2",
+  "type": "rough_terrain_crane",
+  "title": "KATO SR-250Rf2 ラフタークレーン",
+  "note": "KATO_SR250Rf2.dwg の車体(手 4599)の XDATA から。2026-10-06 に実機で読み出した",
+  "unit": "mm",
+  "scale": 1.0,
+  "models": "models/KATO_SR250Rf2/",
+  "boomSections": 3,
+  "dims": {
+    "body_to_cabin": [
+      0.0,
+      0.0,
+      1640.5
+    ],
+    "body_to_outrigger": [
+      [
+        3061.0,
+        0.0,
+        0.0
+      ],
+      [
+        3339.0,
+        0.0,
+        0.0
+      ],
+      [
+        -3669.0,
+        0.0,
+        0.0
+      ],
+      [
+        -3391.0,
+        0.0,
+        0.0
+      ]
+    ],
+    "width_outrigger": [
+      2300.0,
+      2300.0
+    ],
+    "height_outrigger": [
+      500.0,
+      220.0
+    ],
+    "length_boom": [
+      9350.0,
+      9350.0
+    ],
+    "cabin_to_boom": [
+      -2600.0,
+      1744.5,
+      0.0
+    ],
+    "cabin_to_cylinder": [
+      -1550.0,
+      894.5,
+      0.0
+    ],
+    "boom_to_cylinder": [
+      3364.73,
+      -723.498,
+      0.0
+    ],
+    "y_boom_end": -800.0,
+    "wire": 40000.0,
+    "hook": 0.0
+  },
+  "limits": {
+    "outrigger_min": 2.3,
+    "length_boom_min": 9.35
+  },
+  "controls": [
+    {
+      "key": "outrigger",
+      "label": "アウトリガ張出",
+      "unit": "m",
+      "min": 2.3,
+      "max": 5.5,
+      "step": 0.1
+    },
+    {
+      "key": "angleCabin",
+      "label": "キャビン旋回",
+      "unit": "°",
+      "min": -180,
+      "max": 180,
+      "step": 1
+    },
+    {
+      "key": "angleBoom",
+      "label": "ブーム角度",
+      "unit": "°",
+      "min": 0,
+      "max": 80,
+      "step": 1
+    },
+    {
+      "key": "lengthBoom",
+      "label": "ブーム長さ",
+      "unit": "m",
+      "min": 9.35,
+      "max": 40,
+      "step": 0.5
+    },
+    {
+      "key": "lengthWire",
+      "label": "ワイヤ長さ",
+      "unit": "m",
+      "min": 0.5,
+      "max": 30,
+      "step": 0.5
+    }
+  ],
+  "readouts": [
+    {
+      "key": "radius",
+      "label": "作業半径",
+      "unit": "m",
+      "scale": 0.001,
+      "digits": 2
+    }
+  ]
+}

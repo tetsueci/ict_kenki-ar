@@ -1,0 +1,247 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>重機 AR（試作）</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.6 system-ui, sans-serif; background: #111; color: #eee; }
+  canvas { display: block; }
+  #ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px 12px 14px;
+        background: rgba(20,20,22,.9); backdrop-filter: blur(6px); }
+  .row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+  .row label { flex: 0 0 7.5em; font-size: 13px; color: #bbb; }
+  .row input[type=range] { flex: 1 1 auto; min-width: 0; }
+  .row .val { flex: 0 0 5em; text-align: right; font-variant-numeric: tabular-nums; }
+  button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #555;
+           background: #2a2a2e; color: #eee; }
+  button.on { background: #1f6feb; border-color: #1f6feb; }
+  #read { font-size: 17px; font-weight: 600; margin: 2px 0 6px; }
+  #msg { font-size: 12px; color: #999; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center;
+          background: #111; font-size: 15px; color: #999; }
+  /* ★id で display を指定すると [hidden] が効かない（優先度が勝つ）。
+     これが無いと読み込み中の幕が残って画面が真っ黒に見える */
+  #load[hidden] { display: none; }
+</style>
+
+<div id="load">読み込み中…</div>
+<div id="ui" hidden>
+  <div id="read"></div>
+  <div class="row" id="machines"></div>
+  <div id="sliders"></div>
+  <div class="row"><button id="ar">AR で置く</button><span id="msg"></span></div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/+esm';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js/+esm';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js/+esm';
+import { poseCrawlerCrane } from './src/ccrane.js';
+import { poseRoughTerrainCrane } from './src/rcrane.js';
+
+const KINEMATICS = {
+  rough_terrain_crane: poseRoughTerrainCrane,
+  crawler_crane: poseCrawlerCrane,
+};
+const LIST = ['KATO_SR250Rf2', '120tcrawlercrane'];
+
+// ---- 画面 -----------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(4, 9, 3); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.05, 600);
+// 3D で見るときだけ回せるようにする（AR のときは WebXR がカメラを持つ）
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// CAD（Z 上・mm）→ three.js（Y 上・m）。ict_ar-viewer の align.js と同じ向きの取り方。
+// ★部品の GLB も姿勢の行列もぜんぶ CAD のまま（mm・Z 上）。変換はここ 1 か所だけ
+const world = new THREE.Group();
+world.matrixAutoUpdate = false;
+scene.add(world);
+const grid = new THREE.GridHelper(120, 60, 0x555555, 0x2c2c2c);
+scene.add(grid);
+
+let arScale = 1;                      // AR のときだけ縮める
+function placeWorld() {
+  const k = 0.001 * arScale;
+  world.matrix.set(k, 0, 0, 0,
+                   0, 0, k, 0,
+                   0, -k, 0, 0,
+                   0, 0, 0, 1);
+  world.matrix.setPosition(world.position);
+}
+
+// ---- 機械を読む -----------------------------------------------------
+const loader = new GLTFLoader();
+const CYAN = new THREE.MeshStandardMaterial({ color: 0x18c6c6, roughness: .7, metalness: .15 });
+const GREY = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: .8, metalness: .1 });
+const DARK = new THREE.MeshStandardMaterial({ color: 0x4e545c, roughness: .85, metalness: .1 });
+const matOf = n => (/^(body|outrigger|plate|foot)/.test(n) ? DARK
+  : /^(cabin|boom\d|jib)/.test(n) ? CYAN : GREY);
+
+// 4 本のアウトリガは同じブロックを使い回す
+const COPIES = { 'outrigger': 'outrigger', 'outrigger-foot': 'foot', 'outrigger-base': 'plate' };
+
+let M = null, nodes = {}, st = {}, pose = null;
+
+async function loadMachine(id) {
+  const ld = document.getElementById('load');
+  ld.hidden = false; ld.textContent = '読み込み中…';
+  world.clear(); nodes = {};
+  M = await (await fetch(`machines/${id}.json`)).json();
+  pose = KINEMATICS[M.type];
+
+  if (M.models) {
+    const parts = await (await fetch(M.models + '_parts.json')).json();
+    for (const [name, info] of Object.entries(parts)) {
+      const g = await loader.loadAsync(M.models + info.file);
+      g.scene.traverse(c => { if (c.isMesh) c.material = matOf(name); });
+      const put = (key, obj) => {
+        const o = new THREE.Group();
+        o.add(obj); o.matrixAutoUpdate = false; o.visible = false;
+        world.add(o); nodes[key] = o;
+      };
+      if (name in COPIES) {
+        for (const s of ['fr', 'fl', 'br', 'bl']) put(COPIES[name] + '_' + s, g.scene.clone(true));
+      } else {
+        put(name, g.scene);
+      }
+    }
+  }
+
+  st = {};
+  if (M.type === 'rough_terrain_crane') {
+    st = { outrigger: M.limits.outrigger_min, angleCabin: 0, angleBoom: 45,
+           lengthBoom: M.limits.length_boom_min, lengthWire: 10 };
+  } else {
+    st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10 };
+  }
+  buildUI(); apply(); frameCamera();
+  ld.hidden = true;
+  document.getElementById('ui').hidden = false;
+  document.getElementById('msg').textContent = M.models ? ''
+    : 'この機械は部品のメッシュがまだありません（計算だけ動いています）';
+}
+
+function buildUI() {
+  const mw = document.getElementById('machines');
+  mw.innerHTML = '<label>機械</label>';
+  for (const id of LIST) {
+    const b = document.createElement('button');
+    b.textContent = id === M.id ? M.title : id;
+    if (id === M.id) b.className = 'on';
+    b.onclick = () => loadMachine(id);
+    mw.appendChild(b);
+  }
+  const sw = document.getElementById('sliders');
+  sw.innerHTML = '';
+  for (const c of M.controls) {
+    const row = document.createElement('div'); row.className = 'row';
+    if (c.type === 'choice') {
+      row.innerHTML = `<label>${c.label}</label>`;
+      M[c.from].forEach((o, i) => {
+        const b = document.createElement('button');
+        b.textContent = o.name;
+        if (st[c.key] === i) b.className = 'on';
+        b.onclick = () => { st[c.key] = i; buildUI(); apply(); };
+        row.appendChild(b);
+      });
+    } else {
+      row.innerHTML = `<label>${c.label}</label>
+        <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${st[c.key]}">
+        <span class="val"></span>`;
+      const inp = row.querySelector('input'), val = row.querySelector('.val');
+      const show = () => { val.textContent = (+inp.value).toFixed(c.step < 1 ? 1 : 0) + c.unit; };
+      inp.oninput = () => { st[c.key] = +inp.value; show(); apply(); };
+      show();
+    }
+    sw.appendChild(row);
+  }
+}
+
+function apply() {
+  const r = pose(M, st, { point: [0, 0, 0], angle: 0, normal: [0, 0, 1] });
+  for (const [name, o] of Object.entries(nodes)) {
+    const mx = r.parts[name];
+    o.visible = !!mx && !(r.hidden && r.hidden.includes(name));
+    if (mx) o.matrix.fromArray(mx);
+  }
+  const out = (M.readouts || []).map(x =>
+    `${x.label} ${(r[x.key] * x.scale).toFixed(x.digits)}${x.unit}`);
+  out.push(`先端高さ ${(r.tip[2] / 1000).toFixed(2)}m`);
+  document.getElementById('read').textContent = out.join('　／　');
+}
+
+function frameCamera() {
+  placeWorld(); world.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(world);
+  if (!isFinite(box.min.x)) return;
+  const s = box.getSize(new THREE.Vector3());
+  const c = box.getCenter(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z) * 0.8 + 5;
+  camera.position.set(c.x + d * .72, Math.max(c.y, 3) + d * .38, c.z + d * .72);
+  orbit.target.set(c.x, Math.max(c.y, 2) * .6, c.z);
+  orbit.update();
+}
+
+// ---- AR -------------------------------------------------------------
+const msg = document.getElementById('msg');
+const arBtn = document.getElementById('ar');
+let reticle = null, hitSource = null, placed = false;
+
+if (navigator.xr && await navigator.xr.isSessionSupported('immersive-ar').catch(() => false)) {
+  arBtn.onclick = startAR;
+} else {
+  arBtn.disabled = true;
+  msg.textContent = 'この端末では AR が使えません（3D 表示だけ）';
+}
+
+async function startAR() {
+  const session = await navigator.xr.requestSession('immersive-ar',
+    { requiredFeatures: ['hit-test'] });
+  await renderer.xr.setSession(session);
+  grid.visible = false; arScale = 1 / 50; placed = false;
+  reticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
+  const viewer = await session.requestReferenceSpace('viewer');
+  hitSource = await session.requestHitTestSource({ space: viewer });
+  session.addEventListener('select', () => {
+    if (reticle.visible) { world.position.setFromMatrixPosition(reticle.matrix); placed = true; }
+  });
+  session.addEventListener('end', () => {
+    hitSource = null; grid.visible = true; arScale = 1;
+    world.position.set(0, 0, 0);
+    if (reticle) { scene.remove(reticle); reticle = null; }
+    frameCamera();
+  });
+}
+
+renderer.setAnimationLoop((t, frame) => {
+  if (frame && hitSource && !placed && reticle) {
+    const ref = renderer.xr.getReferenceSpace();
+    const hits = frame.getHitTestResults(hitSource);
+    if (hits.length) {
+      reticle.visible = true;
+      reticle.matrix.fromArray(hits[0].getPose(ref).transform.matrix);
+    }
+  } else if (reticle) reticle.visible = false;
+  placeWorld();
+  if (!renderer.xr.isPresenting) orbit.update();
+  renderer.render(scene, camera);
+});
+
+await loadMachine(new URLSearchParams(location.search).get('m') || LIST[0]);
+</script>
