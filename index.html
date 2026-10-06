@@ -54,6 +54,7 @@
     <div class="row" id="machines"></div>
     <div id="sliders"></div>
     <div class="row" id="scales" hidden><label>縮尺</label></div>
+    <div class="row" id="dists" hidden><label>置く距離</label></div>
     <div class="row"><button id="ar">AR で置く</button></div>
     <div id="msg"></div>
   </div>
@@ -118,11 +119,31 @@ const grid = new THREE.GridHelper(120, 60, 0x555555, 0x2c2c2c);
 scene.add(grid);
 
 let arScale = 1;                      // AR のときだけ縮める
-let arDiv = 50;                       // AR の縮尺の分母（1/50）
+let arDiv = 10;                       // AR の縮尺の分母（1/10）
+// ★縮尺と距離は組で決める。既定は 1/10 × 10m：
+//   25t ラフターが 1.8m ほどになり、10m 先なら全体の動きが見える。
+//   狭いところなら 1/50 × 足元、外なら 実寸 × 20m
 // ★実寸（1/1）は外でしか意味がないし、小さすぎても読めない。
 //   ict_ar-viewer が行き着いた候補にそろえる
 const AR_DIVS = [1, 10, 25, 50, 100];
 const scaleRow = document.getElementById('scales');
+// ★地面の検出は足元にしか出ないことが多い。
+//   そこに置くと、離れないと動きが見えない。
+//   見ている方向へ指定した距離だけ出して、見つかった床の高さに落とす
+let arDist = 10;
+const AR_DISTS = [0, 5, 10, 20, 50];
+const distRow = document.getElementById('dists');
+for (const k of AR_DISTS) {
+  const b = document.createElement('button');
+  b.textContent = k === 0 ? '足元' : k + 'm';
+  if (k === arDist) b.className = 'on';
+  b.onclick = () => {
+    arDist = k;
+    [...distRow.querySelectorAll('button')].forEach(
+      (x, i) => x.classList.toggle('on', AR_DISTS[i] === k));
+  };
+  distRow.appendChild(b);
+}
 for (const k of AR_DIVS) {
   const b = document.createElement('button');
   b.textContent = k === 1 ? '実寸' : '1/' + k;
@@ -368,7 +389,7 @@ async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   grid.visible = false; placed = false; arScale = 1 / arDiv;
   arBtn.textContent = 'AR をやめる';
   arBtn.onclick = () => session.end();
-  scaleRow.hidden = false;
+  scaleRow.hidden = false; distRow.hidden = false;
   // ★十字。align.js と同じ形（丸＋縦横の線＋真ん中の赤い点）。
   //   丸だけだと「どこが中心か」が分からないし、
   //   案内の文（十字が出たら）とも食い違う
@@ -388,7 +409,7 @@ async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   if (hitOK) {
     const viewer = await session.requestReferenceSpace('viewer');
     hitSource = await session.requestHitTestSource({ space: viewer });
-    arMsg = '地面を映して、十字が出たらタップ';
+    arMsg = '地面を映して、十字が出たらタップ（もう一度タップで置き直し）';
   } else {
     // 地面が取れないときは、目の前に置くだけにする
     world.position.set(0, -1.2, -4);
@@ -398,10 +419,12 @@ async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   if (ng.length) arMsg += '\n（' + label + 'で始めました。断られたもの）\n' + ng.join('\n');
   showMsg();
 
+  // ★置いたあとも十字は出したまま。タップのたびに置き直せる。
+  //   「置いたら終わり」だと、遠くへ置き直すのに AR を出入りすることになる
   session.addEventListener('select', () => {
     if (reticle.visible) {
       world.position.setFromMatrixPosition(reticle.matrix);
-      placed = true; arMsg = ''; showMsg();
+      placed = true;
     }
   });
   session.addEventListener('end', () => {
@@ -409,18 +432,39 @@ async function startInSession(session, { label, overlayOK, hitOK, ng }) {
     world.position.set(0, 0, 0);
     if (reticle) { scene.remove(reticle); reticle = null; }
     arBtn.textContent = 'AR で置く'; arBtn.onclick = arStart;
-    scaleRow.hidden = true; arMsg = ''; showMsg();
+    scaleRow.hidden = true; distRow.hidden = true; arMsg = ''; showMsg();
     frameCamera();
   });
 }
 
+const _hitM = new THREE.Matrix4();
+const _p = new THREE.Vector3();
+const _o = new THREE.Vector3();
+const _d = new THREE.Vector3();
+
 renderer.setAnimationLoop((t, frame) => {
-  if (frame && hitSource && !placed && reticle) {
+  if (frame && hitSource && reticle) {
     const ref = renderer.xr.getReferenceSpace();
     const hits = frame.getHitTestResults(hitSource);
     if (hits.length) {
       reticle.visible = true;
-      reticle.matrix.fromArray(hits[0].getPose(ref).transform.matrix);
+      _hitM.fromArray(hits[0].getPose(ref).transform.matrix);
+      _p.setFromMatrixPosition(_hitM);
+      if (arDist > 0) {
+        // ★見ている向きへ arDist だけ出し、見つかった床の高さに落とす。
+        //   地面の検出は足元までしか出ないことが多いので、
+        //   「十字の場所に置く」だけだと遠くへ置けない
+        const xc = renderer.xr.getCamera();
+        xc.getWorldPosition(_o);
+        xc.getWorldDirection(_d);
+        _d.y = 0;
+        if (_d.lengthSq() > 1e-6) {
+          _d.normalize();
+          _p.set(_o.x + _d.x * arDist, _p.y, _o.z + _d.z * arDist);
+        }
+      }
+      // 傾きは持たせない（床の上に平らに置く）
+      reticle.matrix.makeTranslation(_p.x, _p.y, _p.z);
     }
   } else if (reticle) reticle.visible = false;
   placeWorld();
