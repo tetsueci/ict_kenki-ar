@@ -36,6 +36,12 @@
   select { font: inherit; padding: 6px 10px; border-radius: 8px;
            border: 1px solid #555; background: #2a2a2e; color: #eee; }
   .muted { font-size: 12px; color: #8b9199; }
+  input.num { width: 4.2em; font: inherit; padding: 5px 6px; border-radius: 7px;
+              border: 1px solid #555; background: #2a2a2e; color: #eee;
+              text-align: right; }
+  #read.ng { color: #ffb4a8; }
+  #sliders select { flex: 0 0 9.5em; }
+  #sliders input[type=range] { flex: 1 1 auto; min-width: 0; }
   #read { font-size: 17px; font-weight: 600; margin: 2px 0 6px; }
   /* ★知らせは必ず全部読めるようにする。横に並べると切れて、
      肝心の理由が見えない（2026-10-06 に実際そうなった）*/
@@ -66,6 +72,7 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js/+esm';
 import { poseCrawlerCrane } from './src/ccrane.js';
 import { poseRoughTerrainCrane } from './src/rcrane.js';
+import { ratedLoad } from './src/load.js';
 
 const KINEMATICS = {
   rough_terrain_crane: poseRoughTerrainCrane,
@@ -119,17 +126,28 @@ const grid = new THREE.GridHelper(120, 60, 0x555555, 0x2c2c2c);
 scene.add(grid);
 
 let arScale = 1;                      // AR のときだけ縮める
-let arDiv = 10;                       // AR の縮尺の分母（1/10）
-// ★縮尺と距離は組で決める。既定は 1/10 × 10m：
-//   25t ラフターが 1.8m ほどになり、10m 先なら全体の動きが見える。
-//   狭いところなら 1/50 × 足元、外なら 実寸 × 20m
-// ★実寸（1/1）は外でしか意味がないし、小さすぎても読めない。
-//   ict_ar-viewer が行き着いた候補にそろえる
-const AR_DIVS = [1, 10, 25, 50, 100];
+let arNum = 1, arDiv = 10;            // AR の縮尺（1/10）
+// ★縮尺は □/□ の数字入力。候補をボタンで並べると
+//   欲しい値がないことがある
 const scaleRow = document.getElementById('scales');
-// ★地面の検出は足元にしか出ないことが多い。
-//   そこに置くと、離れないと動きが見えない。
-//   見ている方向へ指定した距離だけ出して、見つかった床の高さに落とす
+{
+  scaleRow.innerHTML = '<label>縮尺</label>';
+  const a = document.createElement('input');
+  const b = document.createElement('input');
+  for (const [x, v] of [[a, arNum], [b, arDiv]]) {
+    x.type = 'number'; x.min = '1'; x.step = '1'; x.value = v;
+    x.className = 'num';
+  }
+  const sl = document.createElement('span'); sl.textContent = '/';
+  const upd = () => {
+    const n = Math.max(+a.value || 1, 1e-6), d = Math.max(+b.value || 1, 1e-6);
+    arNum = n; arDiv = d; arScale = n / d;
+  };
+  a.oninput = b.oninput = upd;
+  scaleRow.appendChild(a); scaleRow.appendChild(sl); scaleRow.appendChild(b);
+}
+// ★地面の検出は足元にしか出ないことが多い。そこに置くと、
+//   離れないと動きが見えない。見ている向きへ出して置けるようにする
 let arDist = 10;
 const AR_DISTS = [0, 5, 10, 20, 50];
 const distRow = document.getElementById('dists');
@@ -144,19 +162,10 @@ for (const k of AR_DISTS) {
   };
   distRow.appendChild(b);
 }
-for (const k of AR_DIVS) {
-  const b = document.createElement('button');
-  b.textContent = k === 1 ? '実寸' : '1/' + k;
-  if (k === arDiv) b.className = 'on';
-  b.onclick = () => {
-    arDiv = k; arScale = 1 / k;
-    [...scaleRow.querySelectorAll('button')].forEach(
-      (x, i) => x.classList.toggle('on', AR_DIVS[i] === k));
-  };
-  scaleRow.appendChild(b);
-}
 function placeWorld() {
-  const k = 0.001 * arScale;
+  // ★縮尺が効くのは AR のときだけ。
+  //   3D で見ているときまで縮むと、機械が画面から消える
+  const k = 0.001 * (renderer.xr.isPresenting ? arScale : 1);
   world.matrix.set(k, 0, 0, 0,
                    0, 0, k, 0,
                    0, -k, 0, 0,
@@ -176,6 +185,8 @@ const matOf = n => (/^(body|outrigger|plate|foot)/.test(n) ? DARK
 const COPIES = { 'outrigger': 'outrigger', 'outrigger-foot': 'foot', 'outrigger-base': 'plate' };
 
 let M = null, nodes = {}, st = {}, pose = null;
+let LOAD = null;          // 定格荷重表（機械ごと）
+let ctlIndex = 0;         // スライダーが今動かしている項目
 
 async function loadMachine(id) {
   const ld = document.getElementById('load');
@@ -183,6 +194,22 @@ async function loadMachine(id) {
   world.clear(); nodes = {};
   M = await (await fetch(`machines/${id}.json`, { cache: 'no-cache' })).json();
   pose = KINEMATICS[M.type];
+  // ★定格荷重表は機械ごとに違う。無ければ「表なし」と出す
+  LOAD = null;
+  if (M.load) {
+    try { LOAD = await (await fetch(M.load, { cache: 'no-cache' })).json(); }
+    catch { LOAD = null; }
+  }
+  // ★動かせる幅は荷重表に合わせる。表が 6.6m まで持っているのに
+  //   スライダーが 5.5m 止まりだと、いちばん張った段を選べない
+  if (LOAD) {
+    const wide = (key, v) => {
+      const c = M.controls.find(x => x.key === key);
+      if (c && v) c.max = Math.max(c.max, v);
+    };
+    wide('outrigger', Math.max(...LOAD.outrigger));
+    wide('lengthBoom', Math.max(...LOAD.boom));
+  }
 
   if (M.models) {
     const parts = await (await fetch(M.models + '_parts.json', { cache: 'no-cache' })).json();
@@ -205,9 +232,9 @@ async function loadMachine(id) {
   st = {};
   if (M.type === 'rough_terrain_crane') {
     st = { outrigger: M.limits.outrigger_min, angleCabin: 0, angleBoom: 45,
-           lengthBoom: M.limits.length_boom_min, lengthWire: 10 };
+           lengthBoom: M.limits.length_boom_min, lengthWire: 10, ratioAllow: 80 };
   } else {
-    st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10 };
+    st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10, ratioAllow: 80 };
   }
   buildUI(); apply(); frameCamera();
   ld.hidden = true;
@@ -236,30 +263,43 @@ function buildUI() {
   t.className = 'muted';
   t.textContent = M.title;
   mw.appendChild(t);
+  // ★スライダーは 1 本だけ。何を動かすかはドロップダウンで選ぶ。
+  //   項目ごとに 1 本ずつ並べると、スマホの画面が操作盤で埋まる
   const sw = document.getElementById('sliders');
   sw.innerHTML = '';
-  for (const c of M.controls) {
-    const row = document.createElement('div'); row.className = 'row';
-    if (c.type === 'choice') {
-      row.innerHTML = `<label>${c.label}</label>`;
-      M[c.from].forEach((o, i) => {
-        const b = document.createElement('button');
-        b.textContent = o.name;
-        if (st[c.key] === i) b.className = 'on';
-        b.onclick = () => { st[c.key] = i; buildUI(); apply(); };
-        row.appendChild(b);
-      });
-    } else {
-      row.innerHTML = `<label>${c.label}</label>
-        <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${st[c.key]}">
-        <span class="val"></span>`;
-      const inp = row.querySelector('input'), val = row.querySelector('.val');
-      const show = () => { val.textContent = (+inp.value).toFixed(c.step < 1 ? 1 : 0) + c.unit; };
-      inp.oninput = () => { st[c.key] = +inp.value; show(); apply(); };
-      show();
-    }
-    sw.appendChild(row);
-  }
+  const ctl = document.createElement('div'); ctl.className = 'row';
+  const sel2 = document.createElement('select');
+  M.controls.forEach((c, i) => {
+    const o = document.createElement('option');
+    o.value = String(i); o.textContent = c.label;
+    if (i === ctlIndex) o.selected = true;
+    sel2.appendChild(o);
+  });
+  const inp = document.createElement('input');
+  inp.type = 'range';
+  const val = document.createElement('span'); val.className = 'val';
+  const pick = c => {
+    const isChoice = c.type === 'choice';
+    inp.min = isChoice ? 0 : c.min;
+    inp.max = isChoice ? M[c.from].length - 1 : c.max;
+    inp.step = isChoice ? 1 : c.step;
+    inp.value = st[c.key];
+    show(c);
+  };
+  const show = c => {
+    val.textContent = c.type === 'choice'
+      ? M[c.from][st[c.key]].name
+      : (+st[c.key]).toFixed((c.step || 1) < 1 ? 1 : 0) + (c.unit || '');
+  };
+  sel2.onchange = () => { ctlIndex = +sel2.value; pick(M.controls[ctlIndex]); };
+  inp.oninput = () => {
+    const c = M.controls[ctlIndex];
+    st[c.key] = +inp.value; show(c); apply();
+  };
+  if (ctlIndex >= M.controls.length) ctlIndex = 0;
+  pick(M.controls[ctlIndex]);
+  ctl.appendChild(sel2); ctl.appendChild(inp); ctl.appendChild(val);
+  sw.appendChild(ctl);
 }
 
 function apply() {
@@ -269,10 +309,23 @@ function apply() {
     o.visible = !!mx && !(r.hidden && r.hidden.includes(name));
     if (mx) o.matrix.fromArray(mx);
   }
-  const out = (M.readouts || []).map(x =>
-    `${x.label} ${(r[x.key] * x.scale).toFixed(x.digits)}${x.unit}`);
-  out.push(`先端高さ ${(r.tip[2] / 1000).toFixed(2)}m`);
-  document.getElementById('read').textContent = out.join('　／　');
+  const out = [`作業半径 ${(r.radius / 1000).toFixed(2)}m`,
+               `先端高さ ${(r.tip[2] / 1000).toFixed(2)}m`];
+  // ★定格荷重と許容荷重は並べて出す。
+  //   定格＝表の値、許容＝定格 × 許容荷重割合
+  if (LOAD) {
+    const rl = ratedLoad(LOAD, {
+      outrigger: st.outrigger, radius: r.radius / 1000, boomLength: st.lengthBoom,
+    });
+    const u = LOAD.unitWeight || 't';
+    out.push(`定格荷重 ${rl.text}`);
+    out.push(rl.value === null ? `許容荷重 －`
+      : `許容荷重 ${(rl.value * (st.ratioAllow ?? 100) / 100).toFixed(2)}${u}`
+        + `（${st.ratioAllow ?? 100}%）`);
+  }
+  const el = document.getElementById('read');
+  el.textContent = out.join('　／　');
+  el.classList.toggle('ng', !!LOAD && /吊れない|走行状態/.test(el.textContent));
 }
 
 function frameCamera() {
@@ -386,7 +439,7 @@ async function startAR() {
 
 async function startInSession(session, { label, overlayOK, hitOK, ng }) {
   await renderer.xr.setSession(session);
-  grid.visible = false; placed = false; arScale = 1 / arDiv;
+  grid.visible = false; placed = false; arScale = arNum / arDiv;
   arBtn.textContent = 'AR をやめる';
   arBtn.onclick = () => session.end();
   scaleRow.hidden = false; distRow.hidden = false;
