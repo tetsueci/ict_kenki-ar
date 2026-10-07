@@ -259,10 +259,6 @@ function buildUI() {
   }
   sel.onchange = () => loadMachine(sel.value);
   mw.appendChild(sel);
-  const t = document.createElement('span');
-  t.className = 'muted';
-  t.textContent = M.title;
-  mw.appendChild(t);
   // ★スライダーは 1 本だけ。何を動かすかはドロップダウンで選ぶ。
   //   項目ごとに 1 本ずつ並べると、スマホの画面が操作盤で埋まる
   const sw = document.getElementById('sliders');
