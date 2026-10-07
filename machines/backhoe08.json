@@ -1,0 +1,156 @@
+{
+  "id": "backhoe08",
+  "type": "backhoe",
+  "title": "汎用バックホウ 0.8m3 級",
+  "short": "0.8BH",
+  "note": "backhoe.dxf の車体(手 2AF3A1)の XDATA から。far は刃先で dxf_to_glb.py が測ったもの",
+  "unit": "mm",
+  "scale": 1.0,
+  "models": "models/backhoe08/",
+  "parts": [
+    "body",
+    "cabin",
+    "boom",
+    "boom_cylinder0",
+    "boom_cylinder1",
+    "arm",
+    "arm_cylinder0",
+    "arm_cylinder1",
+    "bucket_cylinder0",
+    "bucket_cylinder1",
+    "bucketlink_arm",
+    "bucketlink_bucket",
+    "bucket0",
+    "bucket1",
+    "bucket2",
+    "bucket3"
+  ],
+  "dims": {
+    "body_to_cabin": [
+      0.0,
+      -2.274e-13,
+      910.576643447399
+    ],
+    "cabin_to_boom": [
+      263.3009999999995,
+      840.7974541827789,
+      40.00063202768014
+    ],
+    "boom_to_arm": [
+      6249.200768805156,
+      -4.547e-13,
+      0.0
+    ],
+    "cabin_to_cylinder": [
+      820.0,
+      420.2661431295655,
+      40.00063202767996
+    ],
+    "boom_to_bcylinder": [
+      2925.918570070079,
+      962.9479767296148,
+      -2.169e-13
+    ],
+    "boom_to_acylinder": [
+      3678.855898805156,
+      1228.633032546741,
+      6.83e-14
+    ],
+    "arm_to_bucket": [
+      2916.84716005403,
+      0.0,
+      -4.547e-13
+    ],
+    "arm_to_bocylinder": [
+      -820.5196127767775,
+      335.0,
+      -5.706e-13
+    ],
+    "arm_to_bucylinder": [
+      415.2629747589771,
+      670.0,
+      -2.318e-13
+    ],
+    "arm_to_armpin": [
+      2498.472214568544,
+      39.79999999999563,
+      -4.685e-13
+    ],
+    "bucketlink": 620.1713583923754,
+    "bucketpin": 620.2068505531776
+  },
+  "buckets": [
+    {
+      "name": "標準バケット",
+      "dist": 440.278816611929,
+      "far": [
+        -220.02,
+        -1418.6
+      ]
+    },
+    {
+      "name": "バケット1",
+      "dist": 440.163539536838,
+      "far": [
+        -600.06,
+        -1205.37
+      ]
+    },
+    {
+      "name": "バケット2",
+      "dist": 561.032465439521,
+      "far": [
+        -606.06,
+        -1610.31
+      ]
+    },
+    {
+      "name": "バケット3",
+      "dist": 561.0324654395283,
+      "far": [
+        -642.88,
+        -1714.01
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "key": "angleCabin",
+      "label": "キャビン旋回",
+      "unit": "°",
+      "min": -180,
+      "max": 180,
+      "step": 1
+    },
+    {
+      "key": "angleBoom",
+      "label": "ブーム角度",
+      "unit": "°",
+      "min": -90,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "angleArm",
+      "label": "アーム角度",
+      "unit": "°",
+      "min": -180,
+      "max": 0,
+      "step": 1
+    },
+    {
+      "key": "angleBucket",
+      "label": "バケット角度",
+      "unit": "°",
+      "min": -90,
+      "max": 120,
+      "step": 1
+    },
+    {
+      "key": "bucketType",
+      "label": "アタッチメント",
+      "type": "choice",
+      "from": "buckets"
+    }
+  ]
+}

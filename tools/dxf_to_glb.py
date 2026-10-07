@@ -163,9 +163,15 @@ def main():
         p = os.path.join(out, short + ".glb")
         write_glb(p, {(0.62, 0.66, 0.70, 1.0): (v, t)}, name=short)
         lo, hi = v.min(axis=0), v.max(axis=0)
+        # ★基点からいちばん遠い頂点。バケットなら「刃先」、ブームなら「先端」。
+        #   XDATA には入っていないが、画面に出す値（作業半径・刃先の高さ）に要る
+        #   ★距離はブロックの xy 面で測る（動きが面の中で起きるため）。
+        #     3 次元で測るとバケットの横の角（z=±530）を拾って刃先にならない
+        far = v[int(np.argmax((v[:, :2] ** 2).sum(axis=1)))]
         index[short] = {"file": short + ".glb", "tris": int(len(t)),
                         "min": [round(float(x), 2) for x in lo],
-                        "max": [round(float(x), 2) for x in hi]}
+                        "max": [round(float(x), 2) for x in hi],
+                        "far": [round(float(x), 2) for x in far]}
         print("  %-20s 三角形 %6d  %8.0f x %8.0f x %8.0f mm  基点 %s"
               % (short, len(t), hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2],
                  "0" if base == [0.0, 0.0, 0.0] else base))

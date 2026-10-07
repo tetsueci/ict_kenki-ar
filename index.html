@@ -72,13 +72,15 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js/+esm';
 import { poseCrawlerCrane } from './src/ccrane.js';
 import { poseRoughTerrainCrane } from './src/rcrane.js';
+import { poseBackhoe } from './src/backhoe.js';
 import { ratedLoad } from './src/load.js';
 
 const KINEMATICS = {
   rough_terrain_crane: poseRoughTerrainCrane,
   crawler_crane: poseCrawlerCrane,
+  backhoe: poseBackhoe,
 };
-const LIST = ['KATO_SR250Rf2', '120tcrawlercrane'];
+const LIST = ['KATO_SR250Rf2', '120tcrawlercrane', 'backhoe08'];
 // ドロップダウンに出す短い名前。★正は machines/*.json の short
 const SHORT = {};
 await Promise.all(LIST.map(async id => {
@@ -214,6 +216,10 @@ async function loadMachine(id) {
   if (M.models) {
     const parts = await (await fetch(M.models + '_parts.json', { cache: 'no-cache' })).json();
     for (const [name, info] of Object.entries(parts)) {
+      // ★machines/*.json に parts があれば、そこに挙がっている部品だけ読む。
+      //   図面には古い世代の同じ形（attachment1 など）も残っていて、
+      //   読むだけ読んで一度も使わない
+      if (M.parts && !M.parts.includes(name)) continue;
       const g = await loader.loadAsync(M.models + info.file);
       g.scene.traverse(c => { if (c.isMesh) c.material = matOf(name); });
       const put = (key, obj) => {
@@ -233,6 +239,9 @@ async function loadMachine(id) {
   if (M.type === 'rough_terrain_crane') {
     st = { outrigger: M.limits.outrigger_min, angleCabin: 0, angleBoom: 45,
            lengthBoom: M.limits.length_boom_min, lengthWire: 10, ratioAllow: 80 };
+  } else if (M.type === 'backhoe') {
+    st = { angleCabin: 0, angleBoom: 30, angleArm: -100, angleBucket: 30,
+           bucketType: 0 };
   } else {
     st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10, ratioAllow: 80 };
   }
@@ -305,8 +314,12 @@ function apply() {
     o.visible = !!mx && !(r.hidden && r.hidden.includes(name));
     if (mx) o.matrix.fromArray(mx);
   }
-  const out = [`作業半径 ${(r.radius / 1000).toFixed(2)}m`,
-               `先端高さ ${(r.tip[2] / 1000).toFixed(2)}m`];
+  // ★出す値は機械ごとに違う（バックホウは刃先の高さ、クレーンは先端高さ）。
+  //   src/*.js が readouts を返していればそれを使う
+  const out = r.readouts
+    ? r.readouts.slice()
+    : [`作業半径 ${(r.radius / 1000).toFixed(2)}m`,
+       `先端高さ ${(r.tip[2] / 1000).toFixed(2)}m`];
   // ★定格荷重と許容荷重は並べて出す。
   //   定格＝表の値、許容＝定格 × 許容荷重割合
   if (LOAD) {
