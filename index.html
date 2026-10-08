@@ -221,7 +221,13 @@ async function loadMachine(id) {
       //   読むだけ読んで一度も使わない
       if (M.parts && !M.parts.includes(name)) continue;
       const g = await loader.loadAsync(M.models + info.file);
-      g.scene.traverse(c => { if (c.isMesh) c.material = matOf(name); });
+      // ★ガラス（DXF で 255,255,255 の面）は GLB の材質のまま残す。
+      //   matOf で塗り替えると透けなくなる
+      g.scene.traverse(c => {
+        if (!c.isMesh) return;
+        if (c.material && c.material.transparent) { c.material.depthWrite = false; return; }
+        c.material = matOf(name);
+      });
       const put = (key, obj) => {
         const o = new THREE.Group();
         o.add(obj); o.matrixAutoUpdate = false; o.visible = false;
