@@ -81,7 +81,8 @@
       2015.76,
       1250.0,
       1902.0
-    ]
+    ],
+    "glass": 28
   },
   "cylinder0": {
     "file": "cylinder0.glb",

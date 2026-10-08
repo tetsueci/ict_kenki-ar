@@ -26,6 +26,9 @@ ict_kenki-ar/
   test/run_rcrane.mjs     ラフター     → node test/run_rcrane.mjs
 ```
 
+★**搭乗（運転席から見る）を別のところで作るなら [EYE.md](EYE.md) だけ読めば足りる。**
+目の位置は `machines/<機械>.json` の `eye`、取り出しは `src/eye.js`。
+
 見るには
 
 ```bash
