@@ -1,0 +1,120 @@
+{
+  "id": "TADANO_BT200",
+  "type": "bridge_checker",
+  "title": "TADANO BT-200 橋梁点検車",
+  "short": "BT200",
+  "note": "カタログだけから組んだ。3D データは無い。出どころ DAM/kenki/doc_tadano_bt-200_bt-110_bt-400_lineup_brochure_metric.pdf、寸法の決め方は DAM/kenki/BT-200_params.md",
+  "unit": "mm",
+  "scale": 1.0,
+  "models": "models/TADANO_BT200/",
+  "parts": [
+    "body",
+    "turret",
+    "outrigger",
+    "outrigger-foot",
+    "boom0",
+    "boom1",
+    "post0",
+    "post1",
+    "post2",
+    "post3",
+    "post4",
+    "deckboom0",
+    "deckboom1",
+    "deckboom2",
+    "deck"
+  ],
+  "dims": {
+    "swing_to_boomfoot": [
+      -690.0,
+      2710.0
+    ],
+    "boom_len": 3060.0,
+    "post_len": 3325.0,
+    "post_stages": 5,
+    "deckboom_len": 3500.0,
+    "deckboom_stages": 3,
+    "boomtip_to_deckboom": 211.0,
+    "outrigger_front": [
+      2060.0,
+      2540.0,
+      2740.0
+    ],
+    "outrigger_rear": [
+      2130.0,
+      2610.0,
+      2810.0
+    ],
+    "body_to_outrigger_f": 1000.0,
+    "body_to_outrigger_r": -2100.0,
+    "outrigger_base": 1090.0,
+    "outrigger_z": 500.0
+  },
+  "stages": [
+    {
+      "name": "中間1張出"
+    },
+    {
+      "name": "中間2張出"
+    },
+    {
+      "name": "最大張出"
+    }
+  ],
+  "controls": [
+    {
+      "key": "angleSwing",
+      "label": "ブーム旋回",
+      "unit": "°",
+      "min": -10,
+      "max": 105,
+      "step": 1
+    },
+    {
+      "key": "angleBoom",
+      "label": "ブーム起伏",
+      "unit": "°",
+      "min": -15,
+      "max": 60,
+      "step": 1
+    },
+    {
+      "key": "lengthBoom",
+      "label": "ブーム長さ",
+      "unit": "m",
+      "min": 3.06,
+      "max": 5.11,
+      "step": 0.05
+    },
+    {
+      "key": "lengthPost",
+      "label": "ポスト長さ",
+      "unit": "m",
+      "min": 3.325,
+      "max": 9.825,
+      "step": 0.1
+    },
+    {
+      "key": "lengthDeckboom",
+      "label": "デッキブーム長さ",
+      "unit": "m",
+      "min": 3.5,
+      "max": 8.21,
+      "step": 0.1
+    },
+    {
+      "key": "angleDeck",
+      "label": "デッキ旋回",
+      "unit": "°",
+      "min": 0,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "outrigger",
+      "label": "アウトリガ張出",
+      "type": "choice",
+      "from": "stages"
+    }
+  ]
+}
