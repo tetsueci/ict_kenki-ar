@@ -54,6 +54,25 @@
 </style>
 
 <div id="load">読み込み中…</div>
+
+<script>
+// ★GitHub Pages は index.html を Cache-Control: max-age=600 で返す。
+//   直して公開しても、ブラウザは 10 分間ネットワークを見ずに古いまま出す。
+//   「変わっていない」と言われる原因がこれだった（2026-10-13）。
+//   そこで読み込みのたびに、ブラウザが持っている版と取り直した版を比べ、
+//   違っていれば一度だけ読み込み直す。版の番号を手で上げる必要は無い。
+(async () => {
+  try {
+    const u = location.pathname;
+    const now = await (await fetch(u)).text();                       // いま出している版
+    const fresh = await (await fetch(u, { cache: 'reload' })).text(); // 取り直した版
+    if (now === fresh) { sessionStorage.removeItem('knk_rl'); return; }
+    if (sessionStorage.getItem('knk_rl')) return;                    // 1 回だけ
+    sessionStorage.setItem('knk_rl', '1');
+    location.reload();
+  } catch (e) { /* 通信できないときは何もしない */ }
+})();
+</script>
 <div id="ui" hidden>
   <div id="panel">
     <div id="read"></div>
