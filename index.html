@@ -251,9 +251,10 @@ async function loadMachine(id) {
     st = { angleCabin: 0, angleBoom: 30, angleArm: -100, angleBucket: 30,
            bucketType: 0 };
   } else if (M.type === 'bridge_checker') {
-    // ★橋を越えて下へ回り込んだ姿勢を初期値にする（この機械の見どころ）
-    st = { outrigger: 2, angleSwing: 0, angleBoom: 30, lengthBoom: 5.11,
-           lengthPost: 6.5, lengthDeckboom: 6.0, angleDeck: 0 };
+    // ★橋を越えて下へ回り込んだ姿勢を初期値にする（この機械の見どころ）。
+    //   ブームは水平・ポストは 9.5m（2026-10-13 ユーザー指定）
+    st = { outrigger: 2, angleSwing: 0, angleBoom: 0, lengthBoom: 5.11,
+           lengthPost: 9.5, lengthDeckboom: 6.0, angleDeck: 0 };
   } else {
     st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10, ratioAllow: 80 };
   }
