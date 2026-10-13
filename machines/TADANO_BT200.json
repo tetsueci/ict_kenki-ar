@@ -3,7 +3,7 @@
   "type": "bridge_checker",
   "title": "TADANO BT-200 橋梁点検車",
   "short": "BT200",
-  "note": "カタログだけから組んだ。3D データは無い。出どころ DAM/kenki/doc_tadano_bt-200_bt-110_bt-400_lineup_brochure_metric.pdf、寸法の決め方は DAM/kenki/BT-200_params.md",
+  "note": "カタログだけから組んだ。3D データは無い。出どころ DAM/kenki/doc_tadano_bt-200_bt-110_bt-400_lineup_brochure_metric.pdf、寸法の決め方は DAM/kenki/BT-200_params.md。運転席と車輪は icon_kenki/cargo.dwg のユニックから借りた（全長だけ BT-200 に合わせて縮めてある）",
   "unit": "mm",
   "scale": 1.0,
   "models": "models/TADANO_BT200/",
@@ -45,8 +45,8 @@
       2610.0,
       2810.0
     ],
-    "body_to_outrigger_f": 1000.0,
-    "body_to_outrigger_r": -2100.0,
+    "body_to_outrigger_f": 1200.0,
+    "body_to_outrigger_r": -1700.0,
     "outrigger_base": 1090.0,
     "outrigger_z": 500.0
   },

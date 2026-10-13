@@ -36,10 +36,15 @@ BODY = (0.62, 0.66, 0.70, 1.0)
 GLASS = (0.68, 0.80, 0.86, 0.30)
 
 # 箱 1 つ = 12 三角形
+#   ★面の回り順は「外から見て反時計回り」。逆にすると法線が内を向き、
+#     手前の面が真っ黒＝透けて見える（2026-10-13 に指摘された）
 _BOX_T = np.array([
-    [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
-    [0, 4, 5], [0, 5, 1], [1, 5, 6], [1, 6, 2],
-    [2, 6, 7], [2, 7, 3], [3, 7, 4], [3, 4, 0]], dtype=np.int64)
+    [0, 2, 1], [0, 3, 2],          # 下（-z）
+    [4, 5, 6], [4, 6, 7],          # 上（+z）
+    [0, 1, 5], [0, 5, 4],          # -y
+    [1, 2, 6], [1, 6, 5],          # +x
+    [2, 3, 7], [2, 7, 6],          # +y
+    [3, 0, 4], [3, 4, 7]], dtype=np.int64)   # -x
 
 
 def box(x0, y0, z0, x1, y1, z1):
@@ -63,23 +68,133 @@ def tube(length, w, h, wall=60.0):
 
 
 # ---------------------------------------------------------------------
-# 車体（トラック 3.5t 車クラス）
-#   ★旋回中心を原点にする。車両の長手は y、+x はブームが出る側（車両左）。
-#     全長 5750 / 全幅 2180 / 全高 3690（格納時。キャブは約 2180）
-#     ホイールベース 2795 / リヤオーバーハング 1845
-#   ★旋回中心の車両方向の位置はカタログから決まらない。
-#     後軸より前 300mm（荷台のほぼ中央）と置いた → BT-200_params.md §5
+# ユニック（icon_kenki\cargo.dwg の 3D部品1）から運転席と車輪を借りる
+#   ★「もう少しトラックらしく」というご指示（2026-10-13）。
+#     BT-200 の 3D データは無いので、同じ小型トラックの運転席を借りる。
+#     元データは BRIDGE で吸い出した DAM/kenki/work/cargo/cargo1.txt
+#     （git の外。無ければ下の箱だけで組む）。
+#   ★全長だけ BT-200 に合わせて x を縮める（6190 → 5750）。
+#     車輪は丸いままにしたいので縮めず、カタログの軸距・輪距へ置き直す。
 # ---------------------------------------------------------------------
+CARGO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "..", "..", "DAM", "kenki", "work", "cargo", "cargo1.txt")
+
+
+def read_dump(path):
+    """BRIDGE が書いたポリフェイスメッシュのダンプ → (頂点, 三角形)"""
+    V, T, base = [], [], 0
+    for ln in io.open(path, encoding="utf-8"):
+        a = ln.split()
+        if not a:
+            continue
+        if a[0] == "m":
+            base = len(V)
+        elif a[0] == "v":
+            V.append([float(a[1]), float(a[2]), float(a[3])])
+        elif a[0] == "f":
+            q = [base + int(x) - 1 for x in a[1:5] if int(x) > 0]
+            if len(q) >= 3:
+                T.append([q[0], q[1], q[2]])
+                if len(q) == 4:
+                    T.append([q[0], q[2], q[3]])
+    return np.asarray(V), np.asarray(T)
+
+
+def clusters(v, t):
+    uq, inv = np.unique(np.round(v, 2), axis=0, return_inverse=True)
+    tt = inv[t]
+    par = np.arange(int(tt.max()) + 1)
+
+    def find(a):
+        r = a
+        while par[r] != r:
+            r = par[r]
+        while par[a] != r:
+            par[a], a = r, par[a]
+        return r
+    for tri in tt:
+        for x, y in ((tri[0], tri[1]), (tri[1], tri[2])):
+            p_, q_ = find(x), find(y)
+            if p_ != q_:
+                par[p_] = q_
+    g = {}
+    for i, tri in enumerate(tt):
+        g.setdefault(find(tri[0]), []).append(i)
+    out = [(np.array(ix), np.unique(t[np.array(ix)])) for ix in g.values()]
+    out.sort(key=lambda a: -len(a[0]))
+    return out
+
+
+def cargo_truck():
+    """(運転席＋シャシ, 車輪 1 つ) を BT-200 の車体座標で返す。無ければ None"""
+    if not os.path.isfile(CARGO):
+        return None
+    v, t = read_dump(CARGO)
+    cl = clusters(v, t)
+    cab_i, cab_v = cl[0]                      # いちばん大きい＝運転席＋シャシ
+    wheels = [c for c in cl if len(c[0]) == 308]
+    if not wheels:
+        return None
+    # --- 運転席＋シャシ ---
+    p = v[cab_v]
+    x0, x1 = p[:, 0].min(), p[:, 0].max()     # 前端 .. 後端（ユニックは +x が後ろ）
+    yc = (p[:, 1].min() + p[:, 1].max()) / 2
+    z0 = p[:, 2].min()
+    k = 5750.0 / (x1 - x0)                    # 全長を BT-200 に合わせる
+    def conv(q):
+        # ユニックの +x（前→後）→ BT-200 の -y、ユニックの +y → BT-200 の +x
+        return np.c_[q[:, 1] - yc,
+                     FRONT_END - (q[:, 0] - x0) * k,
+                     q[:, 2] - z0]
+    idx = {int(a): i for i, a in enumerate(cab_v)}
+    cab = (conv(v[cab_v]), np.vectorize(idx.get)(t[cab_i]))
+    # --- 車輪 1 つ（丸いまま使う。縮めない）---
+    wi, wv = wheels[0]
+    q = v[wv]
+    c = (q.min(axis=0) + q.max(axis=0)) / 2
+    idx = {int(a): i for i, a in enumerate(wv)}
+    wheel = (np.c_[q[:, 1] - c[1], -(q[:, 0] - c[0]), q[:, 2] - z0],
+             np.vectorize(idx.get)(t[wi]))
+    return cab, wheel
+
+
+# ---------------------------------------------------------------------
+# 車体（トラック 3.5t 車クラス）
+#   ★旋回中心を原点にする。車両の長手は y（+y が前）、+x はブームが出る側。
+#     全長 5750 / 全幅 2180 / ホイールベース 2795 /
+#     フロントオーバーハング 1110 / リヤオーバーハング 1845 /
+#     トレッド フロント 1680・リヤ 1525（すべてカタログ）
+#   ★旋回中心の車両方向の位置はカタログから決まらない。
+#     後軸より前 300mm と置いた → BT-200_params.md §7
+# ---------------------------------------------------------------------
+REAR_AXLE = -300.0
+FRONT_AXLE = REAR_AXLE + 2795.0
+FRONT_END = FRONT_AXLE + 1110.0          # = 3605
+REAR_END = REAR_AXLE - 1845.0            # = -2145
+TREAD_F, TREAD_R = 1680.0, 1525.0
+
+
 def make_body():
-    W = 1090.0                      # 全幅 2180 の半分
+    W = 1090.0
+    got = cargo_truck()
     p = []
-    p.append(box(-W, -2500, 400, W, 3250, 900))            # シャシ
-    p.append(box(-W + 60, 1250, 900, W - 60, 3250, 2180))  # キャブ
-    p.append(box(-W, -2400, 900, W, 1150, 1600))           # 架装部（ポンプ・タンク）
-    for sy in (2795 - 300, -300):                           # 前軸・後軸
-        for sx in (-1, 1):
-            tr = 1680.0 if sy > 0 else 1525.0
-            p.append(box(sx * tr / 2 - 180, sy - 420, 0, sx * tr / 2 + 180, sy + 420, 840))
+    if got:
+        cab, wheel = got
+        p.append(cab)
+        for (ax, tr) in ((FRONT_AXLE, TREAD_F), (REAR_AXLE, TREAD_R)):
+            for sx in (-1, 1):
+                v, t = wheel
+                p.append((v + np.array([sx * tr / 2, ax, 0.0]), t))
+    else:
+        # ユニックのダンプが無いときは箱で代用
+        p.append(box(-W, REAR_END, 400, W, FRONT_END, 900))
+        p.append(box(-W + 60, FRONT_AXLE - 600, 900, W - 60, FRONT_END, 2180))
+        for (ax, tr) in ((FRONT_AXLE, TREAD_F), (REAR_AXLE, TREAD_R)):
+            for sx in (-1, 1):
+                p.append(box(sx * tr / 2 - 120, ax - 380, 0,
+                             sx * tr / 2 + 120, ax + 380, 760))
+    # 架装部（ポンプ・タンクなど）。ここは BT-200 のもの
+    p.append(box(-W + 40, REAR_END + 200, 900, W - 40, 900, 1500))
     return merge(p)
 
 
