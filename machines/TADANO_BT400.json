@@ -1,0 +1,135 @@
+{
+  "id": "TADANO_BT400",
+  "type": "bridge_checker4",
+  "title": "TADANO BT-400 橋梁点検車",
+  "short": "BT400",
+  "note": "カタログだけから組んだ。3D データは無い。出どころ DAM/kenki/doc_tadano_bt-200_bt-110_bt-400_lineup_brochure_metric.pdf の 9〜10 頁、寸法の決め方と検算は DAM/kenki/BT-400_params.md。関節が 4 つあり、第2ブームの軸まわりに下半分が 285 度まわる。運転席と車輪は icon_kenki/cargo.dwg のユニックから借り、25t 車の寸法へ伸ばした",
+  "unit": "mm",
+  "scale": 1.0,
+  "models": "models/TADANO_BT400/",
+  "parts": [
+    "body",
+    "turret",
+    "outrigger",
+    "outrigger-foot",
+    "boom1_0",
+    "boom1_1",
+    "boom2",
+    "boom3_0",
+    "boom3_1",
+    "boom3_2",
+    "boom4",
+    "basket"
+  ],
+  "dims": {
+    "swing_zero_from_front": 90.0,
+    "swing_to_boomfoot": [-634.0, 3043.0],
+    "boom1_len": 6000.0,
+    "boom1_stages": 2,
+    "boom1tip_to_boom2": 880.0,
+    "boom2_len": 6953.0,
+    "boom3_swivel_zero": 0.0,
+    "boom3_len": 5180.0,
+    "boom3_stages": 3,
+    "boom4_len": 1300.0,
+    "boom4tip_to_floor": 1720.0,
+    "basket_len": 2000.0,
+    "basket_wid": 850.0,
+    "basket_rail": 1000.0,
+    "max_height": 16100.0,
+    "max_radius": 11400.0,
+    "max_depth": 17400.0,
+    "outrigger_front": [3000.0, 3520.0, 4040.0],
+    "outrigger_rear": [3140.0, 3660.0, 4180.0],
+    "body_to_outrigger_f": 7050.0,
+    "body_to_outrigger_r": -1540.0,
+    "outrigger_base": 600.0,
+    "outrigger_beam": 1500.0,
+    "outrigger_z": 700.0
+  },
+  "stages": [
+    { "name": "中間1張出" },
+    { "name": "中間2張出" },
+    { "name": "最大張出" }
+  ],
+  "controls": [
+    {
+      "key": "angleSwing",
+      "label": "旋回台 旋回",
+      "unit": "°",
+      "min": -100,
+      "max": 100,
+      "step": 1
+    },
+    {
+      "key": "angleBoom1",
+      "label": "第1ブーム 起伏",
+      "unit": "°",
+      "min": 5,
+      "max": 77,
+      "step": 1
+    },
+    {
+      "key": "lengthBoom1",
+      "label": "第1ブーム 長さ",
+      "unit": "m",
+      "min": 6.0,
+      "max": 7.9,
+      "step": 0.05
+    },
+    {
+      "key": "angleBoom2",
+      "label": "第2ブーム 起伏",
+      "unit": "°",
+      "min": 0,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "angleSwivel",
+      "label": "第2ブーム 旋回",
+      "unit": "°",
+      "min": -142.5,
+      "max": 142.5,
+      "step": 1
+    },
+    {
+      "key": "angleBoom3",
+      "label": "第3ブーム 起伏",
+      "unit": "°",
+      "min": -70,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "lengthBoom3",
+      "label": "第3ブーム 長さ",
+      "unit": "m",
+      "min": 5.18,
+      "max": 11.61,
+      "step": 0.05
+    },
+    {
+      "key": "angleBoom4",
+      "label": "第4ブーム 起伏",
+      "unit": "°",
+      "min": -23,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "angleBasket",
+      "label": "バスケット 首振り",
+      "unit": "°",
+      "min": -100,
+      "max": 90,
+      "step": 1
+    },
+    {
+      "key": "outrigger",
+      "label": "アウトリガ張出",
+      "type": "choice",
+      "from": "stages"
+    }
+  ]
+}

@@ -93,6 +93,7 @@ import { poseCrawlerCrane } from './src/ccrane.js';
 import { poseRoughTerrainCrane } from './src/rcrane.js';
 import { poseBackhoe } from './src/backhoe.js';
 import { poseBridgeChecker } from './src/bchecker.js';
+import { poseBridgeChecker4 } from './src/bchecker4.js';
 import { ratedLoad } from './src/load.js';
 
 const KINEMATICS = {
@@ -100,8 +101,9 @@ const KINEMATICS = {
   crawler_crane: poseCrawlerCrane,
   backhoe: poseBackhoe,
   bridge_checker: poseBridgeChecker,
+  bridge_checker4: poseBridgeChecker4,
 };
-const LIST = ['KATO_SR250Rf2', '120tcrawlercrane', 'backhoe08', 'TADANO_BT200'];
+const LIST = ['KATO_SR250Rf2', '120tcrawlercrane', 'backhoe08', 'TADANO_BT200', 'TADANO_BT400'];
 // ドロップダウンに出す短い名前。★正は machines/*.json の short
 const SHORT = {};
 await Promise.all(LIST.map(async id => {
@@ -274,6 +276,13 @@ async function loadMachine(id) {
     //   ブームは水平・ポストは 9.5m（2026-10-13 ユーザー指定）
     st = { outrigger: 2, angleSwing: 0, angleBoom: 0, lengthBoom: 5.11,
            lengthPost: 9.5, lengthDeckboom: 6.0, angleDeck: 0 };
+  } else if (M.type === 'bridge_checker4') {
+    // ★カタログの作業範囲図に描かれている姿勢を初期値にする。
+    //   第1ブームで高欄を越え、第2ブームを垂らし、第3ブームを橋の下へ
+    //   差し込みきった形（この機械の見どころ）。旋回は左（BT-200 と同じ）
+    st = { outrigger: 2, angleSwing: 90, angleBoom1: 5, lengthBoom1: 6.88,
+           angleBoom2: 0, angleSwivel: 0, angleBoom3: 0, lengthBoom3: 11.61,
+           angleBoom4: -23, angleBasket: 0 };
   } else {
     st = { boomType: 0, angleCabin: 0, angleBoom: 60, lengthWire: 10, ratioAllow: 80 };
   }
