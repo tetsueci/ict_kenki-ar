@@ -104,5 +104,33 @@ const run = o => poseBridgeChecker(M, st(o), BASE);
   for (const k of want) { n++; if (!(k in r.parts)) { bad++; console.log('  NG 部品が無い ' + k); } }
 }
 
+// --- ブーム旋回の向きと範囲 --------------------------------------------
+// ★車体の座標では +y が前・+x が右。ブームが出る向きを「前から左回りに何度」で見る
+{
+  const dir = r => {
+    const b = r.parts.boom0;                       // 局所 +x ＝ ブームの向き
+    let t = Math.atan2(b[1], b[0]) * 180 / Math.PI - 90;   // 前（+y）から
+    while (t < 0) t += 360;
+    while (t >= 360) t -= 360;
+    return t;
+  };
+  chk('旋回 0 でブームはほぼ真左（前から 85°）', dir(run()), 85, 1e-6);
+  chk('右いっぱい（前から 75°）', dir(run({ angleSwing: C.angleSwing.min })), 75, 1e-6);
+  chk('左いっぱい（前から 190°）', dir(run({ angleSwing: C.angleSwing.max })), 190, 1e-6);
+  // ★範囲の外を渡しても、範囲の中に収まる
+  chk('範囲より左へ回しても止まる', dir(run({ angleSwing: 300 })), 190, 1e-6);
+  chk('範囲より右へ回しても止まる', dir(run({ angleSwing: -90 })), 75, 1e-6);
+  chk('長さも範囲に収まる', run({ lengthPost: 99 }).deckHeight,
+      run({ lengthPost: C.lengthPost.max }).deckHeight, 1e-9);
+  // ★車両の右前には出ない（カタログ「車両右側での作業はできません」）
+  for (let a = C.angleSwing.min; a <= C.angleSwing.max; a += 1) {
+    const t = dir(run({ angleSwing: a }));
+    n++;
+    if (t < 75 - 1e-6 || t > 190 + 1e-6) {
+      bad++; console.log('  NG 旋回 ' + a + '° で ブームが前から ' + t.toFixed(1) + '°（75〜190 の外）');
+    }
+  }
+}
+
 console.log(`\n${n - bad} / ${n} 一致`);
 process.exit(bad ? 1 : 0);

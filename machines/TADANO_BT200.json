@@ -29,6 +29,7 @@
       -690.0,
       2710.0
     ],
+    "swing_zero_from_front": 85.0,
     "boom_len": 3060.0,
     "post_len": 3325.0,
     "post_stages": 5,

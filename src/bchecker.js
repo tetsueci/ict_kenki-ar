@@ -37,7 +37,24 @@ function mat(p, yaw, pitch) {
  *                       lengthPost(m), lengthDeckboom(m), angleDeck }
  * @param {object} base { point:[x,y,z] WCS mm, angle: ラジアン }
  */
-export function poseBridgeChecker(m, st, base) {
+// 操作の値をカタログの範囲に収める。
+//   ★スライダーの min/max だけに頼らない。範囲の外の値で呼ばれても
+//     カタログに無い姿勢を作らないようにする（2026-10-15 ご指示）
+function clamp(m, st) {
+  const o = { ...st };
+  for (const c of m.controls) {
+    if (c.type === 'choice') {
+      const n = (m[c.from] || []).length;
+      o[c.key] = Math.max(0, Math.min(n - 1, o[c.key] | 0));
+    } else if (typeof c.min === 'number') {
+      o[c.key] = Math.max(c.min, Math.min(c.max, +o[c.key]));
+    }
+  }
+  return o;
+}
+
+export function poseBridgeChecker(m, st0, base) {
+  const st = clamp(m, st0);
   const d = m.dims;
   const B = base.point || [0, 0, 0];
   const a0 = base.angle || 0;                 // 車体の向き
@@ -75,7 +92,15 @@ export function poseBridgeChecker(m, st, base) {
   });
 
   // --- 旋回台 -----------------------------------------------------------
-  const s = a0 + st.angleSwing * D2R;
+  //   ★ブームが出る向きは「車両の前」から左回りに測る。
+  //     カタログのブーム旋回範囲図をベクトルで測ると、扇形の両端は
+  //       ・真左から前へ 15°（＝前から 75°）
+  //       ・真後ろから右へ 10°（＝前から 190°）
+  //     で、開きは 115°。主要諸元の「旋回速度 115°/40s」と一致する。
+  //     「旋回角度 左側105°、右側10°」はこの扇形を基準位置から言ったもので、
+  //     基準位置は前から 85°（ほぼ真左）になる。
+  //   ★車両右側では作業できない（カタログ注記）。真右を向くことは無い
+  const s = a0 + Math.PI / 2 + (d.swing_zero_from_front + st.angleSwing) * D2R;
   parts.turret = mat(at(0, 0, 0), s, 0);
 
   // ブームの面の座標 (X, Z) → 世界座標。X は「ブームが出る向き」
